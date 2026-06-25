@@ -1,0 +1,38 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "architectures": ["SCMP_ARCH_X86_64"],
+  "syscalls": [
+    {
+      "names": [
+        "read", "write", "open", "openat", "close", "stat", "fstat", "lstat",
+        "poll", "lseek", "mmap", "mprotect", "munmap", "brk", "rt_sigaction",
+        "rt_sigprocmask", "ioctl", "pread64", "pwrite64", "readv", "writev",
+        "access", "pipe", "select", "sched_yield", "mremap", "msync", "mincore",
+        "madvise", "dup", "dup2", "pause", "nanosleep", "getitimer", "alarm",
+        "setitimer", "getpid", "sendfile", "socket", "connect", "accept",
+        "sendto", "recvfrom", "sendmsg", "recvmsg", "shutdown", "bind",
+        "listen", "getsockname", "getpeername", "socketpair", "setsockopt",
+        "getsockopt", "clone", "fork", "vfork", "execve", "exit", "wait4",
+        "kill", "uname", "getdents", "getcwd", "chdir", "rename", "mkdir",
+        "rmdir", "unlink", "symlink", "readlink", "chmod", "chown", "umask",
+        "getuid", "getgid", "getpgrp", "getppid", "geteuid", "getegid",
+        "getgroups", "setgroups", "fcntl", "flock", "fsync", "fdatasync",
+        "truncate", "ftruncate", "getdents64", "fchmod", "fchown", "capget",
+        "capset", "sigaltstack", "sendfile64", "statfs", "fstatfs", "futex",
+        "sched_getaffinity", "set_tid_address", "restart_syscall", "fadvise64",
+        "clock_gettime", "clock_getres", "clock_nanosleep", "exit_group",
+        "epoll_wait", "epoll_ctl", "tgkill", "waitid", "openat", "mkdirat",
+        "newfstatat", "unlinkat", "renameat", "faccessat", "pselect6",
+        "ppoll", "set_robust_list", "get_robust_list", "splice", "tee",
+        "sync_file_range", "vmsplice", "move_pages", "accept4", "epoll_pwait",
+        "dup3", "pipe2", "inotify_init1", "preadv", "pwritev", "recvmmsg",
+        "sendmmsg", "setns", "getcpu", "process_vm_readv", "process_vm_writev",
+        "getrandom", "memfd_create", "bpf", "execveat", "userfaultfd",
+        "copy_file_range", "preadv2", "pwritev2", "statx", "io_uring_setup",
+        "io_uring_enter", "io_uring_register", "openat2", "faccessat2",
+        "prctl", "arch_prctl", "rt_sigreturn", "mlock", "munlock"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    }
+  ]
+}

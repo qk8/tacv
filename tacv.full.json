@@ -1,0 +1,80 @@
+{
+  "_comment": "Full-featured TACV configuration. Copy to tacv.json and adjust for your project.",
+  "agentModel": "claude-opus-4-6",
+  "temporalAddress": "localhost:7233",
+  "temporalNamespace": "default",
+  "taskQueue": "tacv-main",
+  "maxSelfCorrectionCycles": 6,
+  "maxReplanAttempts": 2,
+  "maxParallelBranches": 3,
+  "maxParallelCritics": 2,
+  "maxNodeTimeoutSec": 600,
+  "confidenceEscalationThreshold": 0.4,
+  "enableMultiModelCritics": true,
+  "repoPath": ".",
+  "frontendBaseUrl": "http://localhost:3000",
+  "testTimeoutMs": 120000,
+  "agentsMdMaxChars": 4000,
+  "mem0VectorStore": "in-memory",
+  "mem0Config": {},
+  "tokenBudget": {
+    "criticalDollar": 80,
+    "warningDollar": 50,
+    "costPerMInput": 5,
+    "costPerMOutput": 30
+  },
+  "debug": {
+    "userJavaPackage": "com.example",
+    "userTsSrcRoot": "src",
+    "jdwpPort": 5005,
+    "cdpPort": 9229,
+    "debugTimeoutSec": 30,
+    "maxDebugSteps": 10,
+    "actuatorBaseUrl": "http://localhost:8080/actuator"
+  },
+  "stagnation": {
+    "totalAbortForce": 3,
+    "driftRevisionLimit": 2,
+    "semanticSimilarityThreshold": 0.85
+  },
+  "coverage": {
+    "minimumLineCoverage": 80,
+    "maxLineCoverageRegression": 2,
+    "maxBranchCoverageRegression": 2
+  },
+  "mutation": {
+    "enabled": true,
+    "minimumScore": 70,
+    "maxTestFiles": 10,
+    "timeoutSec": 120
+  },
+  "visual": {
+    "enabled": true,
+    "pixelThreshold": 0.02,
+    "maxDiffPercent": 1.0,
+    "baselineDir": "visual-baselines",
+    "viewports": ["mobile", "mobile_lg", "tablet", "desktop", "widescreen"]
+  },
+  "libraryDocs": {
+    "provider": "context7",
+    "maxTokens": 2000
+  },
+  "openApi": {
+    "enabled": true
+  },
+  "performance": {
+    "enabled": true,
+    "regressionThreshold": 0.20,
+    "timeoutSec": 60
+  },
+  "langfuse": {
+    "enabled": true,
+    "publicKey": "${LANGFUSE_PUBLIC_KEY}",
+    "secretKey": "${LANGFUSE_SECRET_KEY}"
+  },
+  "shadowMode": {
+    "enabled": true,
+    "cronSchedule": "0 2 * * *",
+    "maxTasksPerRun": 3
+  }
+}

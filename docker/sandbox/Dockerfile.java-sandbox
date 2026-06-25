@@ -1,0 +1,13 @@
+FROM eclipse-temurin:21-jdk-slim
+
+RUN apt-get update && apt-get install -y \
+    git curl bash maven procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+RUN useradd -m -u 1001 sandbox && chown -R sandbox:sandbox /workspace
+USER sandbox
+
+LABEL org.opencontainers.image.title="TACV Java Sandbox"
+LABEL org.opencontainers.image.description="Isolated Java/Maven execution sandbox for TACV"

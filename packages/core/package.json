@@ -1,0 +1,45 @@
+{
+  "name": "@tacv/core",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./state":       { "import": "./dist/state/index.js",       "types": "./dist/state/index.d.ts" },
+    "./interfaces":  { "import": "./dist/interfaces/index.js",   "types": "./dist/interfaces/index.d.ts" },
+    "./workflows":   { "import": "./dist/workflows/index.js",    "types": "./dist/workflows/index.d.ts" },
+    "./activities":  { "import": "./dist/activities/index.js",   "types": "./dist/activities/index.d.ts" },
+    "./observability":{ "import": "./dist/observability/index.js","types": "./dist/observability/index.d.ts" },
+    "./config":      { "import": "./dist/config/index.js",       "types": "./dist/config/index.d.ts" }
+  },
+  "scripts": {
+    "build":    "tsc -p tsconfig.build.json",
+    "test":     "vitest run",
+    "test:cov": "vitest run --coverage",
+    "lint":     "tsc --noEmit",
+    "clean":    "rimraf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.29.0",
+    "@instructor-ai/instructor": "^1.7.2",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-node": "^0.53.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.49.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.53.0",
+    "@opentelemetry/resources": "^1.26.0",
+    "@opentelemetry/semantic-conventions": "^1.26.0",
+    "@temporalio/activity": "^1.11.4",
+    "@temporalio/client": "^1.11.4",
+    "@temporalio/worker": "^1.11.4",
+    "@temporalio/workflow": "^1.11.4",
+    "pino": "^9.4.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@temporalio/testing": "^1.11.4",
+    "@vitest/coverage-v8": "^2.0.5",
+    "fast-check": "^3.22.0",
+    "pino-pretty": "^11.2.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

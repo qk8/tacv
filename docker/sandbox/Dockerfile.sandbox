@@ -1,0 +1,15 @@
+FROM node:20-slim
+
+RUN apt-get update && apt-get install -y \
+    git curl wget bash procps \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g typescript@latest vitest@latest
+
+WORKDIR /workspace
+
+RUN useradd -m -u 1001 sandbox && chown -R sandbox:sandbox /workspace
+USER sandbox
+
+LABEL org.opencontainers.image.title="TACV Sandbox"
+LABEL org.opencontainers.image.description="Isolated execution sandbox for TACV coding workflow"

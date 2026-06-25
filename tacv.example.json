@@ -1,0 +1,110 @@
+{
+  "_comment": "TACV v2 — Problem-Free Workflow configuration. All 12 failure-mode fixes enabled.",
+  "agentModel": "claude-opus-4-6",
+  "temporalAddress": "localhost:7233",
+  "temporalNamespace": "default",
+  "taskQueue": "tacv-main",
+  "maxSelfCorrectionCycles": 6,
+  "maxReplanAttempts": 2,
+  "maxParallelBranches": 3,
+  "maxParallelCritics": 2,
+  "maxNodeTimeoutSec": 600,
+  "confidenceEscalationThreshold": 0.4,
+  "enableMultiModelCritics": true,
+  "repoPath": ".",
+  "frontendBaseUrl": "http://localhost:3000",
+  "testTimeoutMs": 120000,
+  "agentsMdMaxChars": 4000,
+  "mem0VectorStore": "in-memory",
+  "mem0Config": {},
+
+  "tokenBudget": {
+    "criticalDollar": 80,
+    "warningDollar": 50,
+    "costPerMInput": 5,
+    "costPerMOutput": 30
+  },
+
+  "_fix11_feasibilityCheck": "Prevents spending full budget on underspecified tasks",
+  "feasibility": {
+    "enabled": true,
+    "ambiguityThreshold": 4,
+    "complexityThreshold": 5,
+    "model": "claude-haiku-4-5-20251001"
+  },
+
+  "_fix7_sandboxValidation": "Detects environment drift between sandbox and production",
+  "sandboxEnvExpected": {
+    "javaVersion": "21",
+    "nodeVersion": "20",
+    "timezone": "UTC"
+  },
+
+  "_fix2_flakinessDetection": "Re-runs suspect tests 3 times to detect non-deterministic failures",
+  "flakiness": {
+    "enabled": true,
+    "runCount": 3,
+    "passThreshold": 1.0
+  },
+
+  "_fix1_testValidityReview": "Detects inverted/wrong assertions after 2+ identical failures",
+  "testValidity": {
+    "enabled": true,
+    "triggerAfterCycles": 2,
+    "model": "claude-opus-4-6"
+  },
+
+  "_fix5_blastRadius": "Default: run full suite. incrementalTesting is opt-in only.",
+  "incrementalTesting": {
+    "enabled": false,
+    "fastFeedbackMode": false
+  },
+
+  "coverage": {
+    "minimumLineCoverage": 80,
+    "maxLineCoverageRegression": 2,
+    "maxBranchCoverageRegression": 2
+  },
+
+  "_fix12_mutationThresholds": "Per-path mutation score overrides for critical modules",
+  "mutation": {
+    "enabled": true,
+    "minimumScore": 70,
+    "maxTestFiles": 10,
+    "timeoutSec": 120,
+    "overrides": [
+      { "pattern": "src/payments/", "minimumScore": 95 },
+      { "pattern": "src/auth/",     "minimumScore": 90 },
+      { "pattern": "src/utils/",    "minimumScore": 60 }
+    ]
+  },
+
+  "visual": {
+    "enabled": true,
+    "pixelThreshold": 0.02,
+    "maxDiffPercent": 1.0,
+    "baselineDir": "visual-baselines",
+    "viewports": ["mobile", "tablet", "desktop"]
+  },
+
+  "libraryDocs": { "provider": "context7", "maxTokens": 2000 },
+  "openApi":     { "enabled": true },
+
+  "performance": {
+    "enabled": true,
+    "regressionThreshold": 0.20,
+    "timeoutSec": 60
+  },
+
+  "langfuse": {
+    "enabled": true,
+    "publicKey": "${LANGFUSE_PUBLIC_KEY}",
+    "secretKey": "${LANGFUSE_SECRET_KEY}"
+  },
+
+  "shadowMode": {
+    "enabled": true,
+    "cronSchedule": "0 2 * * *",
+    "maxTasksPerRun": 3
+  }
+}

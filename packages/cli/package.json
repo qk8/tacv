@@ -1,0 +1,29 @@
+{
+  "name": "@tacv/cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "tacv": "./src/main.ts"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/main.ts"
+    }
+  },
+  "dependencies": {
+    "@tacv/core": "workspace:*",
+    "@temporalio/client": "^1.11.4",
+    "commander": "^12.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4",
+    "@vitest/coverage-v8": "^2.0.5"
+  }
+}

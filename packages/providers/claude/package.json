@@ -1,0 +1,28 @@
+{
+  "name": "@tacv/provider-claude",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.29.0",
+    "@instructor-ai/instructor": "^1.7.2",
+    "@tacv/core": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.5",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4",
+    "@vitest/coverage-v8": "^2.0.5"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist"
+  }
+}
