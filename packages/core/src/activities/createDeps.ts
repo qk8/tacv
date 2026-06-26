@@ -13,15 +13,28 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
   const { createLogger } = await import('../observability/logger.js');
   const log = createLogger('tacv.worker');
 
-  // Agent provider — Claude with optional Langfuse tracing
+  // ── Agent provider — tiered construction ────────────────────────────────────
+  //
+  // Tier 1 (preferred): @anthropic-ai/claude-agent-sdk via ClaudeAgentSdkProvider
+  //   - Built-in tool execution (Read, Write, Bash, Glob, Grep)
+  //   - No manual turn loop — SDK manages turns via maxTurns
+  //   - permissionMode='acceptEdits' with Docker/Firecracker as the security boundary
+  //   - Agent SDK's own sandbox is intentionally disabled
+  //
+  // Tier 2 (fallback): @anthropic-ai/sdk via ClaudeAgentProvider
+  //   - Used when the Agent SDK binary is unavailable (CI, restricted envs)
+  //   - Functionally equivalent via the IAgentProvider interface
+  //
+  // Tier 3 (stub): StubAgentProvider — for local dev without API keys
+  //
   let agent: ActivityDeps['agent'];
   try {
-    const { ClaudeAgentProvider }   = await import('@tacv/provider-claude');
-    const { LangfuseTracingAgent }  = await import('@tacv/provider-claude');
-    const { BudgetAwareAgent }      = await import('./infrastructure/BudgetAwareAgent.js');
+    const { ClaudeAgentSdkProvider } = await import('@tacv/provider-claude');
+    const { LangfuseTracingAgent }   = await import('@tacv/provider-claude');
+    const { BudgetAwareAgent }       = await import('./infrastructure/BudgetAwareAgent.js');
 
-    const base = new ClaudeAgentProvider({
-      apiKey:         process.env['ANTHROPIC_API_KEY'] ?? '',
+    // No API key in constructor — the Agent SDK reads ANTHROPIC_API_KEY from env
+    const base = new ClaudeAgentSdkProvider({
       model:          config.agentModel,
       costPerMInput:  config.tokenBudget.costPerMInput,
       costPerMOutput: config.tokenBudget.costPerMOutput,
@@ -32,10 +45,34 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
       : base;
 
     agent = new BudgetAwareAgent(traced, config.tokenBudget);
-  } catch {
-    log.warn('createDeps.claude_unavailable_using_stub');
-    const { StubAgentProvider } = await import('@tacv/stubs');
-    agent = new StubAgentProvider();
+    log.info('createDeps.using_agent_sdk');
+  } catch (sdkErr) {
+    log.warn('createDeps.agent_sdk_unavailable_falling_back_to_classic_sdk', { error: String(sdkErr) });
+    // Tier 2: classic @anthropic-ai/sdk provider with manual tool loop
+    try {
+      const { ClaudeAgentProvider }  = await import('@tacv/provider-claude');
+      const { LangfuseTracingAgent } = await import('@tacv/provider-claude');
+      const { BudgetAwareAgent }     = await import('./infrastructure/BudgetAwareAgent.js');
+
+      const base = new ClaudeAgentProvider({
+        apiKey:         process.env['ANTHROPIC_API_KEY'] ?? '',
+        model:          config.agentModel,
+        costPerMInput:  config.tokenBudget.costPerMInput,
+        costPerMOutput: config.tokenBudget.costPerMOutput,
+      });
+
+      const traced = config.langfuse.enabled && config.langfuse.publicKey
+        ? new LangfuseTracingAgent(base, `tacv-worker-${Date.now()}`, { publicKey: config.langfuse.publicKey, secretKey: config.langfuse.secretKey ?? '' })
+        : base;
+
+      agent = new BudgetAwareAgent(traced, config.tokenBudget);
+      log.info('createDeps.using_classic_sdk');
+    } catch {
+      // Tier 3: in-memory stub for local development without API credentials
+      log.warn('createDeps.claude_unavailable_using_stub');
+      const { StubAgentProvider } = await import('@tacv/stubs');
+      agent = new StubAgentProvider();
+    }
   }
 
   // Structured extractor — Instructor + base Anthropic SDK
