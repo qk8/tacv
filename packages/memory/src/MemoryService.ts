@@ -39,7 +39,7 @@ export class MemoryService {
   async persistLesson(lesson: Record<string, unknown>): Promise<void> {
     await this.provider.add(
       JSON.stringify({ ...lesson, subtype: 'lesson_learned' }),
-      String(lesson['taskId'] ?? 'unknown'), 'tacv-agent',
+      'global', 'tacv-agent',
       { type: 'episodic', subtype: 'lesson_learned', sessionId: lesson['sessionId'] },
     );
   }

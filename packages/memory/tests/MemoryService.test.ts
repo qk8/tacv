@@ -38,7 +38,7 @@ describe('MemoryService', () => {
 
   it('persists lesson with lesson_learned subtype', async () => {
     await service.persistLesson({ taskId: ctx.taskId, sessionId: ctx.sessionId, outcomeSummary: 'Added JWT', keyDecisions: ['Used RS256'] });
-    const items = await provider.getAll(ctx.taskId, 'tacv-agent');
+    const items = await provider.getAll('global', 'tacv-agent');
     expect(items.some(i => i.metadata['subtype'] === 'lesson_learned')).toBe(true);
   });
 
@@ -46,8 +46,11 @@ describe('MemoryService', () => {
     await service.recordAttemptOutcome(ctx, 1, 'FAIL', 'FIX_IMPL');
     await service.persistLesson({ taskId: ctx.taskId, sessionId: ctx.sessionId, outcomeSummary: 'Done' });
     await service.purgeSessionNoise(ctx.taskId);
-    const remaining = await provider.getAll(ctx.taskId, 'tacv-agent');
-    expect(remaining.every(i => i.metadata['subtype'] === 'lesson_learned')).toBe(true);
+    // Task-scoped noise is purged; lessons are stored globally so not affected
+    const taskRemaining = await provider.getAll(ctx.taskId, 'tacv-agent');
+    expect(taskRemaining).toHaveLength(0);
+    const globalItems = await provider.getAll('global', 'tacv-agent');
+    expect(globalItems.some(i => i.metadata['subtype'] === 'lesson_learned')).toBe(true);
   });
 
   it('getRelevantContext returns combined context', async () => {
