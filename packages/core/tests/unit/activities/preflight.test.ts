@@ -20,7 +20,8 @@ describe('preflightImpl', () => {
 
   it('collects type-check violations as critical findings', async () => {
     const deps = makeStubDeps();
-    deps.pluginRegistry = { get: () => ({ ...deps.pluginRegistry.get('ts'), typeCheck: async () => ({ violations: [{ file: 'src/a.ts', line: 3, ruleId: 'TS2345', message: 'Argument of type number is not assignable', resolutionHint: 'cast to correct type' }] }), lint: async () => ({ violations: [] }) } as never), getForFile: () => null };
+    const _savedPlugin1 = deps.pluginRegistry.get('ts');
+    deps.pluginRegistry = { get: () => ({ ..._savedPlugin1, typeCheck: async () => ({ violations: [{ file: 'src/a.ts', line: 3, ruleId: 'TS2345', message: 'Argument of type number is not assignable', resolutionHint: 'cast to correct type' }] }), lint: async () => ({ violations: [] }) } as never), getForFile: () => null };
     const state = { ...createInitialState(task), diffProposal: { diffs: [{ filePath: 'src/a.ts', operation: 'modify' as const, diffContent: '+ fn(42 as any)', language: 'typescript' }], summary: '', testFilePaths: [] } };
     const result = await preflightImpl(state as never, deps);
     expect(result.criticFindings.some(f => f.ruleId === 'TS2345')).toBe(true);

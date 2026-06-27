@@ -20,10 +20,23 @@ import { hitlImpl }               from './hitl/impl.js';
 import { memoryConsolidationImpl } from './memory/impl.js';
 import { runShadowCycleImpl }     from './shadow/impl.js';
 
+// ── Redesign: new activity imports ────────────────────────────────────────────
+import { baselineVerificationImpl } from './baseline/impl.js';
+import { implementationPlanImpl }   from './planning/impl.js';
+import { gitCheckpointImpl }        from './git-checkpoint/impl.js';
+import {
+  verifierTypeCheckStage,
+  verifierTestsStage,
+  verifierApiStage,
+  verifierMutationStage,
+  verifierVisualStage,
+} from './verification/stages.js';
+
 export function registerActivities(deps: ActivityDeps) {
   const ctx = (s: WorkflowState): ActivityDeps => ({ ...deps, taskId: s.taskId, sessionId: s.sessionId });
 
   return {
+    // ── Original activities (kept for backward compat) ──────────────────────
     runBootstrap:           (s: WorkflowState) => bootstrapImpl(s, ctx(s)),
     runScout:               (s: WorkflowState) => scoutImpl(s, ctx(s)),
     runFeasibilityCheck:    (s: WorkflowState) => feasibilityCheckImpl(s, ctx(s)),
@@ -32,7 +45,9 @@ export function registerActivities(deps: ActivityDeps) {
     runSandboxValidation:   (s: WorkflowState) => sandboxValidationImpl(s, ctx(s)),
     runActor:               (s: WorkflowState) => actorImpl(s, ctx(s)),
     runPreflight:           (s: WorkflowState) => preflightImpl(s, ctx(s)),
-    runAllCritics:          (s: WorkflowState) => allCriticsImpl(s, ctx(s)),
+    runAllCritics:          (s: WorkflowState) => allCriticsImpl(s, ctx(s), 'all'),
+    runFastCritics:         (s: WorkflowState) => allCriticsImpl(s, ctx(s), 'fast'),
+    runSemanticCritics:     (s: WorkflowState) => allCriticsImpl(s, ctx(s), 'semantic'),
     runVerifier:            (s: WorkflowState) => verifierImpl(s, ctx(s)),
     runFlakinessCheck:      (s: WorkflowState) => flakinessCheckImpl(s, ctx(s)),
     runTestValidityReview:  (s: WorkflowState) => testValidityReviewImpl(s, ctx(s)),
@@ -41,6 +56,18 @@ export function registerActivities(deps: ActivityDeps) {
     runHitlEscalation:      (s: WorkflowState, reason: EscalationReason) => hitlImpl(s, reason, ctx(s)),
     runMemoryConsolidation: (s: WorkflowState) => memoryConsolidationImpl(s, ctx(s)),
     runShadowCycle:         (c: { repoPath: string; maxTasks: number }) => runShadowCycleImpl(c, deps),
+
+    // ── Redesign: new activities ─────────────────────────────────────────────
+    runBaselineVerification:  (s: WorkflowState) => baselineVerificationImpl(s, ctx(s)),
+    runImplementationPlan:    (s: WorkflowState) => implementationPlanImpl(s, ctx(s)),
+    runGitCheckpoint:         (s: WorkflowState) => gitCheckpointImpl(s, ctx(s)),
+
+    // Staged verifier activities (separate timeouts + retry policies in workflow)
+    runVerifierTypeCheck:  (s: WorkflowState) => verifierTypeCheckStage(s, ctx(s)),
+    runVerifierTests:      (s: WorkflowState) => verifierTestsStage(s, ctx(s)),
+    runVerifierApi:        (s: WorkflowState) => verifierApiStage(s, ctx(s)),
+    runVerifierMutation:   (s: WorkflowState) => verifierMutationStage(s, ctx(s)),
+    runVerifierVisual:     (s: WorkflowState) => verifierVisualStage(s, ctx(s)),
   };
 }
 

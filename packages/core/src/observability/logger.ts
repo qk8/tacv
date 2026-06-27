@@ -1,25 +1,29 @@
-import pino from 'pino';
-import { trace } from '@opentelemetry/api';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Logger = {
+  info:  (msg: string, data?: Record<string, unknown>) => void;
+  warn:  (msg: string, data?: Record<string, unknown>) => void;
+  error: (msg: string, data?: Record<string, unknown>) => void;
+  debug: (msg: string, data?: Record<string, unknown>) => void;
+  child: (bindings: Record<string, unknown>) => Logger;
+};
 
-const LOG_LEVEL  = process.env['LOG_LEVEL']  ?? 'info';
-const LOG_FORMAT = process.env['LOG_FORMAT'] ?? 'json';
-
-export const baseLogger = pino({
-  level: LOG_LEVEL,
-  ...(LOG_FORMAT === 'pretty' ? { transport: { target: 'pino-pretty', options: { colorize: true } } } : {}),
-  formatters: { level: (label: string) => ({ level: label }) },
-  mixin: () => {
-    const span = trace.getActiveSpan();
-    if (!span) return {};
-    const ctx = span.spanContext();
-    return { traceId: ctx.traceId, spanId: ctx.spanId };
-  },
-  redact: ['apiKey', 'password', 'authorization', 'token', 'secretKey'],
-  base: { service: 'tacv', version: process.env['npm_package_version'] ?? '1.0.0' },
-});
-
-export function createLogger(name: string): pino.Logger {
-  return baseLogger.child({ logger: name });
+function makeLogger(name: string): Logger {
+  const log = (level: string) => (msg: string, data?: Record<string, unknown>) => {
+    if (process.env['TACV_LOG'] === 'silent') return;
+    const line = JSON.stringify({ level, logger: name, msg, ...data });
+    if (level === 'error' || level === 'warn') process.stderr.write(line + '\n');
+    else if (process.env['LOG_LEVEL'] !== 'silent') process.stdout.write(line + '\n');
+  };
+  const logger: Logger = {
+    info:  log('info'),
+    warn:  log('warn'),
+    error: log('error'),
+    debug: log('debug'),
+    child: (bindings) => makeLogger(`${name}[${JSON.stringify(bindings)}]`),
+  };
+  return logger;
 }
 
-export const log = createLogger('tacv');
+export function createLogger(name: string): Logger { return makeLogger(name); }
+export const baseLogger = makeLogger('tacv');
+export const log        = makeLogger('tacv');

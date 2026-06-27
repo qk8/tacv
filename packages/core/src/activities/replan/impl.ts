@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { WorkflowState, StrategyCandidate } from '../../state/schemas.js';
+import type { WorkflowState } from '../../state/schemas.js';
+import { StrategyCandidate } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { WorkflowState, DiffProposal } from '../../state/schemas.js';
+import type { WorkflowState } from '../../state/schemas.js';
+import { DiffProposal } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { computeConfidenceScore } from '../../state/transitions.js';
 import { createLogger } from '../../observability/logger.js';
@@ -109,7 +110,7 @@ function buildCompressedActorPrompt(state: WorkflowState, maxCycles: number): st
   // Only critical critic findings — not warnings — to reduce noise
   const critical = state.criticFindings.filter(f => f.severity === 'critical').slice(0, 6);
   if (critical.length > 0) {
-    parts.push(`## Must Fix (Critics)\n${critical.map(f => `- [${f.ruleId}] ${f.file}: ${f.message}\n  Fix: ${f.resolutionHint}`).join('\n')}`);
+    parts.push(`## Critical Issues\n${critical.map(f => `- [${f.ruleId}] ${f.file}: ${f.message}\n  Fix: ${f.resolutionHint}`).join('\n')}`);
   }
 
   // Scope warning for brownfield

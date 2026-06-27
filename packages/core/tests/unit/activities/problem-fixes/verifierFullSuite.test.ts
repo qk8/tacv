@@ -33,9 +33,9 @@ describe('verifierImpl — full suite enforcement', () => {
       mutation: { enabled: true, minimumScore: 70, maxTestFiles: 10, timeoutSec: 120, overrides: [{ pattern: 'src/payments/', minimumScore: 95 }] },
     };
     let capturedTestFile = '';
+    const _savedPlugin1 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin1,
         typeCheck: async () => ({ violations: [] }),
         runProtectionTests: async () => ({ passed: true, totalTests: 5, failedTests: 0, failures: [], coverageReport: null, durationMs: 50 }),
         runAcceptanceTests: async () => ({ passed: true, totalTests: 2, failedTests: 0, failures: [], coverageReport: null, durationMs: 50 }),
@@ -58,9 +58,9 @@ describe('verifierImpl — full suite enforcement', () => {
   it('PASS when mutation score meets generic threshold', async () => {
     const deps = makeStubDeps();
     deps.config = { ...deps.config, mutation: { enabled: true, minimumScore: 70, maxTestFiles: 10, timeoutSec: 120, overrides: [] } };
+    const _savedPlugin2 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin2,
         typeCheck: async () => ({ violations: [] }),
         runProtectionTests: async () => ({ passed: true, totalTests: 5, failedTests: 0, failures: [], coverageReport: null, durationMs: 50 }),
         runAcceptanceTests: async () => ({ passed: true, totalTests: 2, failedTests: 0, failures: [], coverageReport: null, durationMs: 50 }),

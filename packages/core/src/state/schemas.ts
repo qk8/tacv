@@ -193,6 +193,39 @@ export type FeasibilityAssessment = z.infer<typeof FeasibilityAssessment>;
 export const ScopeViolation = z.object({ file: z.string(), reason: z.string() });
 export type ScopeViolation = z.infer<typeof ScopeViolation>;
 
+// ── Redesign additions ─────────────────────────────────────────────────────────
+
+export const BaselineTestResult = z.object({
+  passed:       z.boolean(),
+  failureCount: z.number().int().min(0),
+  failures:     z.array(TestFailure),
+  durationMs:   z.number(),
+  ranAt:        z.number(),
+});
+export type BaselineTestResult = z.infer<typeof BaselineTestResult>;
+
+export const ImplementationPlan = z.object({
+  planSummary:         z.string(),
+  filesToCreate:       z.array(z.string()),
+  filesToModify:       z.array(z.string()),
+  filesToDelete:       z.array(z.string()),
+  testFilesToCreate:   z.array(z.string()),
+  estimatedComplexity: z.enum(['low', 'medium', 'high']),
+  riskyAreas:          z.array(z.string()),
+  criticsApproved:     z.boolean(),
+  fastCriticFindings:  z.array(CriticFinding),
+});
+export type ImplementationPlan = z.infer<typeof ImplementationPlan>;
+
+export const GitCheckpoint = z.object({
+  commitHash:   z.string().nullable(),
+  branch:       z.string(),
+  checkpointAt: z.number(),
+  changedFiles: z.array(z.string()),
+  cycleNumber:  z.number().int(),
+});
+export type GitCheckpoint = z.infer<typeof GitCheckpoint>;
+
 // ── Main WorkflowState (extended) ─────────────────────────────────────────────
 export const WorkflowState = z.object({
   // Identity
@@ -248,6 +281,12 @@ export const WorkflowState = z.object({
   confidenceScore: z.number().min(0).max(1),
   cumulativeCostUsd: z.number().min(0),
 
+  // Redesign: new state fields
+  baselineTestResult:  BaselineTestResult.nullable(),
+  implementationPlan:  ImplementationPlan.nullable(),
+  gitCheckpoint:       GitCheckpoint.nullable(),
+  sessionScratchpad:   z.string().nullable(),
+
   // Memory
   lessonLearned: LessonLearned.nullable(),
   escalationPayload: z.unknown().nullable(),
@@ -274,6 +313,8 @@ export function createInitialState(task: TaskSpec): WorkflowState {
     correctionCycle: { attemptCount: 0, branchName: null, lastErrorHash: null, errorHistory: [], stagnationPattern: 'none', lastOutcomeSignature: null },
     confidenceScore: 1.0, cumulativeCostUsd: 0.0,
     lessonLearned: null, escalationPayload: null, workflowAuditTrail: [],
+    baselineTestResult: null, implementationPlan: null,
+    gitCheckpoint: null, sessionScratchpad: null,
   });
 }
 

@@ -19,9 +19,9 @@ describe('verifierImpl', () => {
 
   it('returns FAIL when type check fails', async () => {
     const deps = makeStubDeps();
+    const _savedPlugin1 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin1,
         typeCheck: async () => ({ violations: [{ file: 'src/User.ts', line: 5, ruleId: 'TS2322', message: 'Type error', resolutionHint: 'Fix it' }] }),
       } as never),
       getForFile: () => null,
@@ -34,9 +34,9 @@ describe('verifierImpl', () => {
 
   it('returns FAIL when protection tests fail', async () => {
     const deps = makeStubDeps();
+    const _savedPlugin2 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin2,
         typeCheck: async () => ({ violations: [] }),
         runProtectionTests: async () => ({ passed: false, totalTests: 5, failedTests: 1, failures: [{ testName: 'UserTest', message: 'expected true but got false' }], coverageReport: null, durationMs: 100 }),
       } as never),

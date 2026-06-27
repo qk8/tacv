@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { WorkflowState, LessonLearned } from '../../state/schemas.js';
+import type { WorkflowState } from '../../state/schemas.js';
+import { LessonLearned } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import * as fs from 'node:fs/promises';
@@ -41,7 +42,7 @@ Return safe=true only if none of these red flags are present.`,
       LessonQualityReview,
       { system: 'You audit lesson quality to prevent bad patterns from propagating to future sessions.', model: 'claude-haiku-4-5-20251001' },
     );
-    return review.safe ? [] : review.concerns;
+    return review.safe ? [] : (review.concerns ?? []);
   } catch { return []; }
 }
 

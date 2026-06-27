@@ -6,7 +6,7 @@ const SECURITY_PATTERNS: Array<{ pattern: RegExp; ruleId: string; message: strin
   { pattern: /innerHTML\s*=/, ruleId: 'NO_INNER_HTML', message: 'innerHTML assignment — XSS risk', hint: 'Use textContent or a sanitisation library.' },
   { pattern: /password.*=.*['"]\w+['"]/, ruleId: 'HARDCODED_SECRET', message: 'Possible hardcoded password', hint: 'Use environment variables or a secrets manager.' },
   { pattern: /apiKey.*=.*['"]\w{10,}['"]/, ruleId: 'HARDCODED_API_KEY', message: 'Possible hardcoded API key', hint: 'Use environment variables or a secrets manager.' },
-  { pattern: /\.query\s*\+/, ruleId: 'SQL_INJECTION', message: 'String concatenation in SQL query — injection risk', hint: 'Use parameterised queries or an ORM.' },
+  { pattern: /(\.query\s*\+|"SELECT\s.+"\s*\+|'SELECT\s.+'\s*\+|`SELECT\s.+`\s*\+)/, ruleId: 'SQL_INJECTION', message: 'String concatenation in SQL query — injection risk', hint: 'Use parameterised queries or an ORM.' },
 ];
 
 export async function securityCritic(state: WorkflowState, _deps: ActivityDeps): Promise<CriticFinding[]> {

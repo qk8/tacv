@@ -1,4 +1,5 @@
-import type { WorkflowState, FeasibilityAssessment } from '../../state/schemas.js';
+import type { WorkflowState } from '../../state/schemas.js';
+import { FeasibilityAssessment } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 

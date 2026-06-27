@@ -1,4 +1,5 @@
-import type { WorkflowState, TestFaultAssessment } from '../../state/schemas.js';
+import type { WorkflowState } from '../../state/schemas.js';
+import { TestFaultAssessment } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { isTestFile } from '../critics/testPreservationCritic.js';
 import { createLogger } from '../../observability/logger.js';

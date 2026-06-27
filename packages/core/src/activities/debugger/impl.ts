@@ -65,11 +65,16 @@ async function _fallbackTextAnalysis(state: WorkflowState, deps: ActivityDeps): 
     rootCause = result.content.trim().slice(0, 500);
   } catch { /* non-critical */ }
 
+  // ★ REDESIGN: pattern-based error type classification in fallback
+  // The original hardcoded 'UNKNOWN'; now we classify from the stack trace text
+  // so the actor receives a useful errorType even without live debugging.
+  const errorType = classifyErrorType(rawOutput);
+
   return {
     ...state,
     currentPhase: 'ACTOR',
     debugObservations: {
-      errorType:           'UNKNOWN',
+      errorType:           errorType,
       rootCause:           rootCause || '(text analysis only — live debug unavailable)',
       breakpointHits:      [],
       actuatorBeans:       null,
@@ -83,4 +88,33 @@ async function _fallbackTextAnalysis(state: WorkflowState, deps: ActivityDeps): 
       decision: 'fallback_text_analysis', keyValues: { rootCauseLen: rootCause.length },
     }],
   };
+}
+
+/** Pattern-based error type classification — used when live debug is unavailable. */
+function classifyErrorType(rawOutput: string): string {
+  const t = rawOutput.toLowerCase();
+
+  // Java patterns
+  if (/nullpointerexception|npe at /.test(t))          return 'NULL_REFERENCE';
+  if (/beancreationexception|error creating bean/.test(t)) return 'BEAN_CREATION_ERROR';
+  if (/classcastexception/.test(t))                    return 'TYPE_MISMATCH';
+  if (/illegalargumentexception|illegal argument/.test(t)) return 'ILLEGAL_ARGUMENT';
+  if (/indexoutofboundsexception|arrayindexoutofbounds/.test(t)) return 'INDEX_OUT_OF_BOUNDS';
+  if (/stackoverflowerror|stack overflow/.test(t))     return 'STACK_OVERFLOW';
+  if (/outofmemoryerror|java.lang.out of memory/.test(t)) return 'OUT_OF_MEMORY';
+  if (/nosuchbeandefinitionexception|no qualifying bean/.test(t)) return 'BEAN_NOT_FOUND';
+  if (/hibernateexception|transactionrequiredexception/.test(t)) return 'DATABASE_ERROR';
+  if (/timeout|timed out/.test(t))                     return 'TIMEOUT';
+
+  // TypeScript / JavaScript patterns
+  if (/cannot read prop|cannot read properties of (undefined|null)/.test(t)) return 'NULL_REFERENCE';
+  if (/typeerror/.test(t))                             return 'TYPE_MISMATCH';
+  if (/referenceerror/.test(t))                        return 'REFERENCE_ERROR';
+  if (/syntaxerror/.test(t))                           return 'SYNTAX_ERROR';
+  if (/assertion.*failed|expected.*to.*be|assert\./.test(t)) return 'ASSERTION_FAILURE';
+  if (/econnrefused|connection refused|econnreset/.test(t)) return 'NETWORK_ERROR';
+  if (/ENOENT|no such file or directory/.test(t))      return 'FILE_NOT_FOUND';
+  if (/permission denied|eacces/.test(t))              return 'PERMISSION_DENIED';
+
+  return 'UNKNOWN';
 }

@@ -34,9 +34,9 @@ describe('flakinessCheckImpl', () => {
     const deps = makeStubDeps();
     deps.config = { ...deps.config, flakiness: { enabled: true, runCount: 3, passThreshold: 1.0 } };
     let callCount = 0;
+    const _savedPlugin1 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin1,
         runAcceptanceTests: async () => {
           callCount++;
           return { passed: callCount % 2 === 0, totalTests: 1, failedTests: callCount % 2 === 0 ? 0 : 1, failures: [], coverageReport: null, durationMs: 50 };
@@ -52,9 +52,9 @@ describe('flakinessCheckImpl', () => {
   it('does not flag stable failing tests', async () => {
     const deps = makeStubDeps();
     deps.config = { ...deps.config, flakiness: { enabled: true, runCount: 3, passThreshold: 1.0 } };
+    const _savedPlugin2 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin2,
         runAcceptanceTests: async () => ({ passed: false, totalTests: 1, failedTests: 1, failures: [{ message: 'consistent fail' }], coverageReport: null, durationMs: 50 }),
       } as never),
       getForFile: () => null,
@@ -67,9 +67,9 @@ describe('flakinessCheckImpl', () => {
     const deps = makeStubDeps();
     deps.config = { ...deps.config, flakiness: { enabled: true, runCount: 2, passThreshold: 1.0 } };
     let call = 0;
+    const _savedPlugin3 = deps.pluginRegistry.get('typescript');
     deps.pluginRegistry = {
-      get: () => ({
-        ...deps.pluginRegistry.get('typescript'),
+      get: () => ({ ..._savedPlugin3,
         runAcceptanceTests: async () => { call++; return { passed: call === 1, totalTests: 1, failedTests: call === 1 ? 0 : 1, failures: [], coverageReport: null, durationMs: 10 }; },
       } as never),
       getForFile: () => null,

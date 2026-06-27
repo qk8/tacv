@@ -119,6 +119,31 @@ export const TestValidityConfig = z.object({
   model:                z.string().default('claude-opus-4-6'),  // needs strong reasoning
 });
 
+
+// ── Redesign: new sub-configs ─────────────────────────────────────────────────
+
+export const BaselineConfig = z.object({
+  enabled:  z.boolean().default(true),
+  failFast: z.boolean().default(true),   // escalate to HITL if baseline is broken
+});
+
+export const PlanningConfig = z.object({
+  enabled:                 z.boolean().default(true),
+  validateWithFastCritics: z.boolean().default(true),
+  model:                   z.string().default('claude-haiku-4-5-20251001'),
+});
+
+export const GitCheckpointConfig = z.object({
+  enabled:      z.boolean().default(false),   // opt-in; requires git in PATH
+  branchPrefix: z.string().default('tacv/'),
+  authorName:   z.string().default('TACV Bot'),
+  authorEmail:  z.string().default('tacv@automated'),
+});
+
+export const CriticLanesConfig = z.object({
+  alwaysRunSemantic:       z.boolean().default(false),
+  semanticLaneDeferCycles: z.number().int().min(0).default(1),
+});
 export const WorkflowConfig = z.object({
   // Temporal
   temporalAddress:   z.string().default('localhost:7233'),
@@ -158,6 +183,11 @@ export const WorkflowConfig = z.object({
   feasibility:        FeasibilityConfig.default({}),           // NEW
   flakiness:          FlakinessConfig.default({}),             // NEW
   testValidity:       TestValidityConfig.default({}),          // NEW
+  // Redesign sub-configs
+  baseline:     BaselineConfig.default({}),
+  planning:     PlanningConfig.default({}),
+  gitCheckpoint: GitCheckpointConfig.default({}),
+  criticLanes:  CriticLanesConfig.default({}),
 });
 export type WorkflowConfig = z.infer<typeof WorkflowConfig>;
 

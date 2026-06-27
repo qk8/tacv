@@ -18,11 +18,15 @@ export const humanResumeSignal  = defineSignal<[HumanDecision]>('human.resume');
 export const humanAbortSignal   = defineSignal<[{ reason: string }]>('human.abort');
 export const workflowStateQuery = defineQuery<WorkflowState>('workflow.state');
 
+// ── Proxy activity groups with differentiated timeouts ─────────────────────────
+// Standard activities: 10-minute timeout, 3 retries
 const {
   runBootstrap, runScout, runFeasibilityCheck, runValueNode, runTddGate,
-  runSandboxValidation, runActor, runPreflight, runAllCritics, runVerifier,
+  runSandboxValidation, runActor, runPreflight, runAllCritics,
   runFlakinessCheck, runTestValidityReview, runIntelligentDebugger, runReplan,
   runHitlEscalation, runMemoryConsolidation,
+  // Redesign: new activities
+  runBaselineVerification, runImplementationPlan, runGitCheckpoint,
 } = proxyActivities<RegisteredActivities>({
   startToCloseTimeout: '10 minutes',
   retry: {
@@ -31,6 +35,38 @@ const {
     nonRetryableErrorTypes: ['BudgetExceededError'],
   },
 });
+
+// Fast type-check: 2-minute timeout, 2 retries (cheap & quick)
+const { runVerifierTypeCheck } = proxyActivities<RegisteredActivities>({
+  startToCloseTimeout: '2 minutes',
+  retry: { maximumAttempts: 2, initialInterval: '1s', backoffCoefficient: 2 },
+});
+
+// Test execution: 10-minute timeout, 2 retries
+const { runVerifierTests } = proxyActivities<RegisteredActivities>({
+  startToCloseTimeout: '10 minutes',
+  retry: { maximumAttempts: 2, initialInterval: '5s', backoffCoefficient: 2 },
+});
+
+// API tests: 5-minute timeout, 2 retries
+const { runVerifierApi } = proxyActivities<RegisteredActivities>({
+  startToCloseTimeout: '5 minutes',
+  retry: { maximumAttempts: 2, initialInterval: '5s', backoffCoefficient: 2 },
+});
+
+// Mutation: 5-minute timeout, 1 retry only (expensive)
+const { runVerifierMutation } = proxyActivities<RegisteredActivities>({
+  startToCloseTimeout: '5 minutes',
+  retry: { maximumAttempts: 1, initialInterval: '10s', backoffCoefficient: 2 },
+});
+
+// Visual: 10-minute timeout, 1 retry (environment-sensitive)
+const { runVerifierVisual } = proxyActivities<RegisteredActivities>({
+  startToCloseTimeout: '10 minutes',
+  retry: { maximumAttempts: 1, initialInterval: '10s', backoffCoefficient: 2 },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Promise<LessonLearned | null> {
   let state   = createInitialState(task);
@@ -41,11 +77,24 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
   setHandler(humanResumeSignal, (d) => { human = d; });
   setHandler(humanAbortSignal, ({ reason }) => { log.warn('workflow.aborted', { reason }); aborted = true; });
 
-  // ── Linear setup phases ───────────────────────────────────────────────────
+  // ── Setup phases ──────────────────────────────────────────────────────────
   state = await runBootstrap(state);
   state = await runScout(state);
 
-  // FIX 11: Feasibility check before spending budget
+  // ★ REDESIGN: Baseline verification — verify tests pass BEFORE touching code
+  // This prevents the agent from burning budget on pre-existing failures it didn't cause.
+  state = await runBaselineVerification(state);
+  if (state.currentPhase === 'HITL_ESCALATION') {
+    log.warn('workflow.baseline_failed_hitl', {
+      hint: 'Tests were already failing before agent started — fix baseline first',
+    });
+    state = await runHitlEscalation(state, 'max_cycles_without_progress');
+    const received = await condition(() => human !== null || aborted, '48 hours');
+    if (!received || aborted || human?.action === 'reject') return null;
+    human = null;
+  }
+
+  // Feasibility check (escalate early on ambiguous/high-risk tasks)
   state = await runFeasibilityCheck(state);
   if (state.currentPhase === 'HITL_ESCALATION') {
     state = await _handleHitl(state, 'high_ambiguity_before_start', config, human, aborted, runHitlEscalation);
@@ -54,54 +103,60 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
   }
 
   state = await runValueNode(state);
+
+  // ★ REDESIGN: Implementation planning — agent plans before coding
+  // Critics validate the plan structure BEFORE any code is written.
+  state = await runImplementationPlan(state);
+
   state = await runTddGate(state);
 
-  // FIX 7 (sandbox validation only in GREENFIELD — BROWNFIELD skips to ACTOR in tddGate)
   if (state.currentPhase === 'SANDBOX_VALIDATION') {
     state = await runSandboxValidation(state);
   }
 
   // ── Correction loop ───────────────────────────────────────────────────────
   for (let i = 0; i < config.maxSelfCorrectionCycles && !aborted; i++) {
+    state = withAuditEntry(state, {
+      node: 'correction_loop', decision: `cycle_start_${i}`,
+      keyValues: { cycle: i, cost: state.cumulativeCostUsd },
+    });
+
     state = await runActor(state);
     state = await runPreflight(state);
-    state = await runAllCritics(state);
-    state = await runVerifier(state);
 
-    // FIX 4: Flakiness check — detect non-deterministic tests before drawing conclusions
+    // ★ REDESIGN: Split critics — fast lane always, semantic lane deferred
+    // allCriticsImpl internally applies the deferral config from criticLanes
+    state = await runAllCritics(state);
+
+    // ★ REDESIGN: Staged verifier — 5 activities with independent retry/timeout
+    // Short-circuits: each stage skips if the previous set a FAIL verdict.
+    if (state.verifierVerdict?.blockedByCritic !== true) {
+      state = await runVerifierTypeCheck(state);
+      state = await runVerifierTests(state);
+      state = await runVerifierApi(state);
+      state = await runVerifierMutation(state);
+      state = await runVerifierVisual(state);
+    }
+
+    // Flakiness check on first fail to avoid blaming correct code
     if (state.verifierVerdict?.testResult === 'FAIL' && state.correctionCycle.attemptCount >= 1) {
       state = await runFlakinessCheck(state);
       if (state.flakinessReport && state.flakinessReport.flakyTests.length > 0) {
         log.warn('workflow.flakiness_detected', { count: state.flakinessReport.flakyTests.length });
-        // Flakiness doesn't auto-escalate — route back to actor to fix the tests
         state = withAuditEntry(state, { node: 'flakiness_routing', decision: 'flaky_tests_back_to_actor', keyValues: { tests: state.flakinessReport.flakyTests } });
         continue;
       }
     }
 
-    // FIX 3: Test validity review — check if the test itself is wrong
-    if (state.verifierVerdict?.testResult === 'FAIL' &&
-        state.correctionCycle.attemptCount >= config.testValidity.triggerAfterCycles) {
-      state = await runTestValidityReview(state);
-      if (state.currentPhase === 'HITL_ESCALATION') {
-        // Test fault detected — escalate for human review
-        state = await runHitlEscalation(state, 'suspected_test_fault');
-        const received = await condition(() => human !== null || aborted, '48 hours');
-        if (!received || aborted || human?.action === 'reject') {
-          state = withPhase(state, 'FAILED'); break;
-        }
-        if (human?.action === 'override' && human.guidance) {
-          // Human approved test fix — inject guidance and continue
-          state = { ...state, agentsMdContext: human.guidance, currentPhase: 'ACTOR' };
-          human = null; continue;
-        }
-        human = null; continue;
-      }
+    // ★ REDESIGN: Git checkpoint after every verifier PASS
+    // Enables true rollback and speculative branches that fork from a clean commit.
+    if (state.verifierVerdict?.testResult === 'PASS') {
+      state = await runGitCheckpoint(state);
     }
 
+    // Compute routing transition
     const transition = computeVerifierTransition(state, config);
-
-    log.info('workflow.routing', {
+    log.info('workflow.transition', {
       from: state.currentPhase, to: transition.nextPhase, reason: transition.reason,
       confidence: 'confidence' in transition ? transition.confidence : undefined,
       attempt: state.correctionCycle.attemptCount,
@@ -120,16 +175,14 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
       const received = await condition(() => human !== null || aborted, '48 hours');
       if (!received || aborted || human?.action === 'reject') { state = withPhase(state, 'FAILED'); break; }
 
-      // FIX 10: Check budget at escalation — if too low, don't resume
-      const budgetAtEsc    = state.hitlBudgetAtEscalation ?? state.cumulativeCostUsd;
+      const budgetAtEsc     = state.hitlBudgetAtEscalation ?? state.cumulativeCostUsd;
       const budgetRemaining = config.tokenBudget.criticalDollar - budgetAtEsc;
       if (budgetRemaining < config.tokenBudget.criticalDollar * 0.15) {
-        log.warn('workflow.hitl_budget_too_low_for_resume', { budgetRemaining, hint: 'Start a fresh session' });
+        log.warn('workflow.hitl_budget_too_low_for_resume', { budgetRemaining });
         state = withPhase(state, 'FAILED'); break;
       }
 
       if (human?.action === 'override' && human.guidance) {
-        // FIX 10: Store prior guidance so next HITL shows what was already tried
         state = { ...state, agentsMdContext: human.guidance, hitlPriorGuidance: human.guidance };
       }
       human = null;
@@ -142,13 +195,45 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     }
 
     if (transition.nextPhase === 'SPECULATIVE_BRANCH') {
-      // FIX 9: Force diversity in branches
+      // ★ REDESIGN: True parallel speculative branches using Promise.allSettled
+      // Each candidate gets its own child workflow executed concurrently.
+      // Original TACV bug: used sequential for-loop (not parallel at all).
       state = _diversifyStrategyCandidates(state);
-      const result = await executeChild(SpeculativeBranchWorkflow, {
-        args: [state, config], taskQueue: workflowInfo().taskQueue,
-        workflowExecutionTimeout: '30 minutes',
-      }) as SpeculativeBranchResult;
-      if (result.succeeded && result.winningState) { state = { ...state, ...result.winningState }; break; }
+      const candidates = state.strategyCandidates
+        .filter(c => !state.exhaustedBranches.includes(c.strategyId))
+        .slice(0, config.maxParallelBranches);
+
+      log.info('workflow.speculative_branch_start', {
+        branches: candidates.length,
+        // ★ REDESIGN: Each branch has its own git starting point from checkpoint
+        gitBase: state.gitCheckpoint?.commitHash ?? 'dirty-tree',
+      });
+
+      const branchResults = await Promise.allSettled(
+        candidates.map((candidate, idx) =>
+          executeChild(SpeculativeBranchWorkflow, {
+            args: [{ ...state, selectedStrategy: candidate }, config],
+            taskQueue: workflowInfo().taskQueue,
+            workflowExecutionTimeout: '20 minutes',
+            // Unique workflow ID for Temporal Web UI visibility
+            workflowId: `${workflowInfo().workflowId}-branch-${idx}-${candidate.strategyId}`,
+          })
+        )
+      );
+
+      // Take the first successful branch
+      const winner = branchResults
+        .filter((r): r is PromiseFulfilledResult<SpeculativeBranchResult> => r.status === 'fulfilled')
+        .map(r => r.value)
+        .find(r => r.succeeded && r.winningState);
+
+      if (winner?.winningState) {
+        state = { ...state, ...winner.winningState };
+        log.info('workflow.speculative_winner', { strategies: candidates.length });
+        break;
+      }
+
+      log.warn('workflow.speculative_all_failed', { branches: candidates.length });
       state = withPhase(state, 'HITL_ESCALATION');
       continue;
     }
@@ -163,7 +248,72 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
   return state.lessonLearned;
 }
 
-/** FIX 9: Inject diversity hints so speculative branches don't all try the same approach */
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ REDESIGN: Single-strategy child workflow (replaces the sequential for-loop)
+//
+// Original TACV bug: SpeculativeBranchWorkflow iterated candidates in a for-loop,
+// which was SEQUENTIAL, not parallel. The README said "parallel" but the
+// implementation was serial — branches took 3× as long for 3 candidates.
+//
+// Fix: the PARENT (CodingWorkflow) now launches ONE child per candidate via
+// Promise.allSettled. This workflow handles exactly ONE strategy.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function SpeculativeBranchWorkflow(
+  parentState: WorkflowState,
+  _config:     WorkflowConfig,
+): Promise<SpeculativeBranchResult> {
+  const {
+    runActor, runPreflight, runAllCritics,
+    runVerifierTypeCheck, runVerifierTests, runVerifierApi,
+    runVerifierMutation, runVerifierVisual,
+  } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '10 minutes',
+    retry: { maximumAttempts: 2 },
+  });
+
+  const candidate = parentState.selectedStrategy;
+  if (!candidate) {
+    log.warn('speculative.no_candidate');
+    return { succeeded: false, winningState: null, attempts: 1 };
+  }
+
+  log.info('speculative.branch_start', { strategyId: candidate.strategyId });
+
+  try {
+    let s = parentState;
+    s = await runActor(s);
+    s = await runPreflight(s);
+    s = await runAllCritics(s);
+    // Use staged verifier even in speculative branches
+    if (s.verifierVerdict?.blockedByCritic !== true) {
+      s = await runVerifierTypeCheck(s);
+      s = await runVerifierTests(s);
+      s = await runVerifierApi(s);
+      s = await runVerifierMutation(s);
+      s = await runVerifierVisual(s);
+    }
+    if (s.verifierVerdict?.testResult === 'PASS') {
+      log.info('speculative.branch_passed', { strategyId: candidate.strategyId });
+      return { succeeded: true, winningState: s, attempts: 1 };
+    }
+  } catch (err) {
+    log.warn('speculative.branch_failed', { strategyId: candidate.strategyId, error: String(err) });
+  }
+
+  return { succeeded: false, winningState: null, attempts: 1 };
+}
+
+export async function ShadowModeWorkflow(ctx: { repoPath: string; maxTasks: number }): Promise<void> {
+  const { runShadowCycle } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '20 minutes', retry: { maximumAttempts: 2 },
+  });
+  await runShadowCycle(ctx);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 function _diversifyStrategyCandidates(state: WorkflowState): WorkflowState {
   const candidates = state.strategyCandidates.filter(c => !state.exhaustedBranches.includes(c.strategyId));
   if (candidates.length < 2) return state;
@@ -178,47 +328,14 @@ function _diversifyStrategyCandidates(state: WorkflowState): WorkflowState {
 }
 
 async function _handleHitl(
-  state:    WorkflowState, reason: EscalationReason, _config: WorkflowConfig,
-  human:    HumanDecision | null, aborted: boolean,
+  state:    WorkflowState,
+  reason:   EscalationReason,
+  _config:  WorkflowConfig,
+  human:    HumanDecision | null,
+  aborted:  boolean,
   runHitl:  (s: WorkflowState, r: EscalationReason) => Promise<WorkflowState>,
 ): Promise<WorkflowState> {
   const s = await runHitl(state, reason);
   if (aborted || human?.action === 'reject') return withPhase(s, 'FAILED');
   return s;
-}
-
-// ── Speculative Branch Child Workflow ─────────────────────────────────────────
-export async function SpeculativeBranchWorkflow(parentState: WorkflowState, config: WorkflowConfig): Promise<SpeculativeBranchResult> {
-  const { runActor, runPreflight, runAllCritics, runVerifier } =
-    proxyActivities<RegisteredActivities>({ startToCloseTimeout: '10 minutes', retry: { maximumAttempts: 2 } });
-
-  const candidates = parentState.strategyCandidates
-    .filter(c => !parentState.exhaustedBranches.includes(c.strategyId))
-    .slice(0, config.maxParallelBranches);
-
-  log.info('speculative.start', { branches: candidates.length });
-
-  for (const candidate of candidates) {
-    let s = { ...parentState, selectedStrategy: candidate };
-    try {
-      s = await runActor(s);
-      s = await runPreflight(s);
-      s = await runAllCritics(s);
-      s = await runVerifier(s);
-      if (s.verifierVerdict?.testResult === 'PASS') {
-        log.info('speculative.winner', { strategyId: candidate.strategyId });
-        return { succeeded: true, winningState: s, attempts: candidates.length };
-      }
-    } catch (err) {
-      log.warn('speculative.branch_failed', { strategyId: candidate.strategyId, error: String(err) });
-    }
-  }
-  return { succeeded: false, winningState: null, attempts: candidates.length };
-}
-
-export async function ShadowModeWorkflow(ctx: { repoPath: string; maxTasks: number }): Promise<void> {
-  const { runShadowCycle } = proxyActivities<RegisteredActivities>({
-    startToCloseTimeout: '20 minutes', retry: { maximumAttempts: 2 },
-  });
-  await runShadowCycle(ctx);
 }
