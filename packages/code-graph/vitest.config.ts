@@ -3,9 +3,9 @@ import path from 'node:path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@tacv/core/state':      path.resolve('../core/src/state/index.ts'),
-      '@tacv/core/interfaces':    path.resolve('../core/src/interfaces/index.ts'),
-      '@tacv/core/observability': path.resolve('../core/src/observability/index.ts'),
+      '@tacv/core/state':       path.resolve(__dirname, '../core/src/state/index.ts'),
+      '@tacv/core/interfaces':  path.resolve(__dirname, '../core/src/interfaces/index.ts'),
+      '@tacv/core/observability': path.resolve(__dirname, '../core/src/observability/index.ts'),
     },
   },
   test: {
