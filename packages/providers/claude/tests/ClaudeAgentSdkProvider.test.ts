@@ -297,10 +297,10 @@ describe('ClaudeAgentSdkProvider', () => {
 
     it('calculates callCostUsd correctly: (in/1M)*cpi + (out/1M)*cpo', async () => {
       // cpi=5 cpo=30; input=2000 output=800
-      // (2000/1_000_000)*5 + (800/1_000_000)*30 = 0.01/1000 + 0.024/1000 = 0.000034
+      // (2000/1_000_000)*5 + (800/1_000_000)*30 = 0.01 + 0.024 = 0.034
       mockQuery.mockReturnValue(makeStream(SUCCESS_RESULT) as ReturnType<typeof query>);
       const r = await provider.runTask('task', DEFAULT_CONTEXT, DEFAULT_CONFIG, 0);
-      expect(r.callCostUsd).toBeCloseTo(0.000034, 8);
+      expect(r.callCostUsd).toBeCloseTo(0.034, 8);
     });
 
     it('sets totalCostUsd equal to callCostUsd', async () => {
@@ -322,15 +322,15 @@ describe('ClaudeAgentSdkProvider', () => {
       const cheapProvider = new ClaudeAgentSdkProvider({ costPerMInput: 1, costPerMOutput: 2 });
       mockQuery.mockReturnValue(makeStream(SUCCESS_RESULT) as ReturnType<typeof query>);
       const r = await cheapProvider.runTask('task', DEFAULT_CONTEXT, DEFAULT_CONFIG, 0);
-      // (2000/1M)*1 + (800/1M)*2 = 0.000002 + 0.0000016 = 0.0000036
-      expect(r.callCostUsd).toBeCloseTo(0.0000036, 9);
+      // (2000/1M)*1 + (800/1M)*2 = 0.002 + 0.0016 = 0.0036
+      expect(r.callCostUsd).toBeCloseTo(0.0036, 9);
     });
 
     it('correctly applies default rates cpi=5 cpo=30 when not configured', async () => {
       const p = new ClaudeAgentSdkProvider();
       mockQuery.mockReturnValue(makeStream(SUCCESS_RESULT) as ReturnType<typeof query>);
       const r = await p.runTask('task', DEFAULT_CONTEXT, DEFAULT_CONFIG, 0);
-      expect(r.callCostUsd).toBeCloseTo(0.000034, 8);
+      expect(r.callCostUsd).toBeCloseTo(0.034, 8);
     });
   });
 
