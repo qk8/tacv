@@ -8,7 +8,18 @@ export const TokenBudgetConfig = z.object({
 });
 export type TokenBudgetConfig = z.infer<typeof TokenBudgetConfig>;
 
+export const LanguagePluginConfig = z.object({
+  debugPort:       z.number().int().optional(),
+  userPackage:     z.string().optional(),
+  userSrcRoot:     z.string().optional(),
+  actuatorBaseUrl: z.string().optional(),
+  defaultApiPort:  z.number().int().optional(),
+}).passthrough();
+export type LanguagePluginConfig = z.infer<typeof LanguagePluginConfig>;
+
 export const DebugConfig = z.object({
+  // Per-language config is now in WorkflowConfig.languageConfig.
+  // These deprecated fields remain for backward compat with existing tacv.json files.
   userJavaPackage:  z.string().default('com.example'),
   userTsSrcRoot:    z.string().default('src'),
   jdwpPort:         z.number().int().default(5005),
@@ -18,7 +29,6 @@ export const DebugConfig = z.object({
   maxDebugSteps:    z.number().int().default(10),
   actuatorBaseUrl:  z.string().default('http://localhost:8080/actuator'),
 });
-export type DebugConfig = z.infer<typeof DebugConfig>;
 
 export const StagnationConfig = z.object({
   totalAbortForce:             z.number().int().default(3),
@@ -102,6 +112,7 @@ export const WorkflowConfig = z.object({
 
   tokenBudget:   TokenBudgetConfig.default({}),
   debug:         DebugConfig.default({}),
+  languageConfig: z.record(z.string(), LanguagePluginConfig).default({}),
   stagnation:    StagnationConfig.default({}),
   shadowMode:    ShadowModeConfig.default({}),
   coverage:      CoverageConfig.default({}),

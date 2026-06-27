@@ -5,6 +5,7 @@ export default defineWorkspace([
   'packages/memory/vitest.config.ts',
   'packages/code-graph/vitest.config.ts',
   'packages/visual-testing/vitest.config.ts',
+  'packages/contracts/vitest.config.ts',
   'packages/language-plugins/base/vitest.config.ts',
   'packages/language-plugins/typescript/vitest.config.ts',
   'packages/language-plugins/java/vitest.config.ts',

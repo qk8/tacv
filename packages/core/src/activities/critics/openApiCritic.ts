@@ -27,8 +27,9 @@ export async function openApiCritic(
   if (!specPath) return [];
 
   const langId = state.task.languageIds[0] ?? 'typescript';
+  const plugin = deps.pluginRegistry.get(langId);
   const controllerDiffs = state.diffProposal.diffs.filter(d =>
-    isControllerFile(d.filePath, langId),
+    isControllerFile(d.filePath, plugin),
   );
   if (controllerDiffs.length === 0) return [];
 

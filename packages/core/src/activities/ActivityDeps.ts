@@ -7,34 +7,37 @@ import type { ISandboxProvider }     from '../interfaces/ISandboxProvider.js';
 import type { ICodeGraphProvider }   from '../interfaces/ICodeGraphProvider.js';
 import type { ILibraryDocsProvider } from '../interfaces/ILibraryDocsProvider.js';
 
+/**
+ * Re-export ILanguagePlugin from @tacv/language-plugins-base.
+ *
+ * Previously ActivityDeps.ts defined a hand-rolled copy called
+ * ILanguagePluginMinimal to work around a circular package dependency
+ * (core → language-plugins-base → core/state).
+ *
+ * That cycle is broken by @tacv/contracts: both core and language-plugins-base
+ * now depend on @tacv/contracts for shared types, so core can safely import
+ * the real ILanguagePlugin interface without creating a circular dep.
+ */
+export type {
+  ILanguagePlugin,
+  IFrameworkProfile,
+  LanguageSyntaxInfo,
+  IStackParser,
+  DebugAdapterSpec,
+} from '@tacv/language-plugins-base';
+
+import type { ILanguagePlugin, IFrameworkProfile } from '@tacv/language-plugins-base';
+
+/**
+ * Minimal registry interface used by activities.
+ * Concrete implementation lives in @tacv/language-plugins-base (LanguagePluginRegistry).
+ */
 export interface LanguagePluginRegistry {
-  get(languageId: string): ILanguagePluginMinimal;
-  getForFile(filePath: string): ILanguagePluginMinimal | null;
-}
-
-export interface ILanguagePluginMinimal {
-  readonly metadata: { languageId: string; extensions: readonly string[] };
-  build(repoPath: string): Promise<{ success: boolean; errors: string[] }>;
-  typeCheck(repoPath: string, files: string[]): Promise<{ violations: Array<{ file: string; message: string; line: number | null; ruleId: string; resolutionHint: string }> }>;
-  runProtectionTests(repoPath: string, opts?: { testFiles?: string[]; timeout?: number }): Promise<import('../state/schemas.js').TestResult>;
-  runAcceptanceTests(repoPath: string, testFiles: string[], opts?: { timeout?: number; failFast?: boolean }): Promise<import('../state/schemas.js').TestResult>;
-  runApiTests(repoPath: string): Promise<import('../state/schemas.js').ApiTestResult>;
-  runMutationTests(repoPath: string, testFiles: string[]): Promise<import('../state/schemas.js').MutationResult>;
-  runBenchmarks(repoPath: string, affectedFiles: string[]): Promise<{ benchmarks: Array<{ name: string; file: string; opsPerSec: number }> }>;
-  generateTestSkeleton(sourceFile: string, context: Record<string, string>): Promise<{ testFilePath: string; testContent: string; framework: string }>;
-  lint(repoPath: string, changedFiles: string[]): Promise<{ violations: Array<{ file: string; message: string; line: number | null; ruleId: string; resolutionHint: string }> }>;
-  checkArchRules(repoPath: string): Promise<{ violations: Array<{ file: string; message: string; line: number | null; ruleId: string; resolutionHint: string }> }>;
-  detectDeletedTests(diffContent: string): string[];
-  getDebugAdapter(): import('../interfaces/IDebugAdapter.js').IDebugAdapter;
-  getDebugLaunchConfig(repoPath: string): import('../interfaces/IDebugAdapter.js').DebugLaunchConfig;
-  getProfileFor(filePath: string): IFrameworkProfileMinimal | null;
-}
-
-export interface IFrameworkProfileMinimal {
-  readonly profileId: string;
-  generateTestTemplate(sourceFile: string, context: Record<string, string>): { testFilePath: string; testContent: string; framework: string };
-  generateE2eTestTemplate?(feature: string, route: string): { testFilePath: string; testContent: string; framework: string };
-  getActorHints(): string;
+  get(languageId: string): ILanguagePlugin;
+  getForFile(filePath: string): ILanguagePlugin | null;
+  getForExtension(ext: string): ILanguagePlugin | null;
+  getAll(): ILanguagePlugin[];
+  has(languageId: string): boolean;
 }
 
 export interface ActivityDeps {

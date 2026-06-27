@@ -1,11 +1,11 @@
-import type { DebugObservations, WorkflowState } from '@tacv/core/state';
-import type { ISandboxProvider, SandboxHandle } from '@tacv/core/interfaces';
+import type { DebugObservations, WorkflowState } from '@tacv/contracts';
+import type { ISandboxProvider, SandboxHandle } from '@tacv/contracts';
 import { createLogger } from '@tacv/core/observability';
 
 const log = createLogger('tacv.debugger.delta');
 
 export class DeltaDebugStrategy {
-  constructor(private readonly sandbox: ISandboxProvider) {}
+  constructor(private readonly sandbox: ISandboxProvider, private readonly defaultApiPort: number = 3000) {}
 
   async execute(
     obs:        DebugObservations,
@@ -51,7 +51,7 @@ export class DeltaDebugStrategy {
 
   private async _fails(payload: Record<string, unknown>, handle: SandboxHandle, moduleType: string): Promise<boolean> {
     const body = JSON.stringify(payload);
-    const endpoint = moduleType.includes('java') ? 'http://localhost:8080/api/test' : 'http://localhost:3000/api/test';
+    const endpoint = `http://localhost:${this.defaultApiPort}/api/test`;
     const result = await this.sandbox.execInContainer(
       handle,
       `curl -s -w '\\n%{http_code}' -X POST '${endpoint}' -H 'Content-Type: application/json' -d '${body.replace(/'/g, "'\\''")}' 2>/dev/null`,

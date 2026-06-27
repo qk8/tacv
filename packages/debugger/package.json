@@ -2,7 +2,22 @@
   "name": "@tacv/debugger",
   "version": "1.0.0",
   "type": "module",
-  "exports": { ".": { "import": "./src/index.ts" } },
-  "dependencies": { "@tacv/core": "workspace:*", "ws": "^8.18.0" },
-  "devDependencies": { "vitest": "^2.0.5", "@types/ws": "^8.5.12", "typescript": "^5.5.4", "@vitest/coverage-v8": "^2.0.5" }
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@tacv/core": "workspace:*",
+    "ws": "^8.18.0",
+    "@tacv/contracts": "workspace:*",
+    "@tacv/language-plugins-base": "workspace:*",
+    "execa": "^9.3.1"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.5",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.5.4",
+    "@vitest/coverage-v8": "^2.0.5"
+  }
 }

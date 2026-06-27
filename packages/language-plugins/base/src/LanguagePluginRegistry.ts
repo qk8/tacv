@@ -22,8 +22,17 @@ export class LanguagePluginRegistry {
 
   getForFile(filePath: string): ILanguagePlugin | null {
     const ext = '.' + (filePath.split('.').pop()?.toLowerCase() ?? '');
+    return this.getForExtension(ext);
+  }
+
+  /**
+   * Finds a plugin by file extension string (must include the leading dot).
+   * Used by AstDiffAnalyzer and other consumers that work with file paths.
+   */
+  getForExtension(ext: string): ILanguagePlugin | null {
+    const normalised = ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
     for (const plugin of this.plugins.values()) {
-      if (plugin.metadata.extensions.includes(ext)) return plugin;
+      if (plugin.metadata.extensions.includes(normalised)) return plugin;
     }
     return null;
   }

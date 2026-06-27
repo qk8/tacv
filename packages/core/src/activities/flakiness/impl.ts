@@ -13,8 +13,9 @@ export async function flakinessCheckImpl(state: WorkflowState, deps: ActivityDep
 
   const langId = state.task.languageIds[0] ?? 'typescript';
   const plugin = deps.pluginRegistry.get(langId);
+  const testPattern = plugin.getSyntaxInfo().testFilePattern;
   const suspectFiles = [...new Set(
-    failures.map(f => f.file).filter((f): f is string => Boolean(f) && f.endsWith('.test.ts') || f?.endsWith('Test.java') || false),
+    failures.map(f => f.file).filter((f): f is string => Boolean(f) && testPattern.test(f)),
   )];
 
   if (suspectFiles.length === 0) return { ...state, currentPhase: 'TEST_VALIDITY_REVIEW' };

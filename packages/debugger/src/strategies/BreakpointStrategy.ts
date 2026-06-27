@@ -1,5 +1,5 @@
-import type { DebugObservations } from '@tacv/core/state';
-import type { IDebugAdapter, ISandboxProvider, SandboxHandle } from '@tacv/core/interfaces';
+import type { DebugObservations } from '@tacv/contracts';
+import type { IDebugAdapter, ISandboxProvider, SandboxHandle } from '@tacv/contracts';
 import type { DebugStrategy } from '../DebugStrategySelector.js';
 import type { StackFrame } from '../StackTraceParser.js';
 import { createLogger } from '@tacv/core/observability';

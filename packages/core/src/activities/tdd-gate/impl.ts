@@ -136,7 +136,13 @@ function extractSourceFiles(skeleton: unknown, languageId: string): string[] {
   if (!skeleton || typeof skeleton !== 'object') return [];
   const files = (skeleton as Record<string, unknown>)['files'];
   if (!Array.isArray(files)) return [];
-  const ext = languageId === 'java' ? '.java' : '.ts';
+  // Use a registry of primary extensions instead of hardcoded if/else.
+  // Callers (tddGateImpl) already have access to the plugin registry.
+  const LANG_PRIMARY_EXT: Record<string, string> = {
+    java: '.java', kotlin: '.kt', python: '.py',
+    go: '.go', rust: '.rs', csharp: '.cs',
+  };
+  const ext = LANG_PRIMARY_EXT[languageId] ?? '.ts';
   return files.filter((f): f is string => typeof f === 'string' && f.endsWith(ext) && !f.includes('test') && !f.includes('Test'));
 }
 function isFrontendFile(f: string): boolean { return f.endsWith('.tsx') || f.includes('components/') || f.includes('pages/'); }

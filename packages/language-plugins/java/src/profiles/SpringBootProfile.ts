@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 export class SpringBootProfile implements IFrameworkProfile {
   readonly profileId = 'spring-boot'; readonly displayName = 'Spring Boot'; readonly languageId = 'java';
-  matches(f: string): boolean { return /src\/main\/java\/.*\.(Controller|Service|Repository|Component)\.java$/.test(f); }
+  matches(f: string): boolean { return /(Controller|Resource|Service|Repository|Component)\.java$/.test(f); }
   generateTestTemplate(sourceFile: string, ctx: TestSkeletonContext): TestScaffold {
     const cls = path.basename(sourceFile, '.java');
     const pkg = this._inferPackage(sourceFile);

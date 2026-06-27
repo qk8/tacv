@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
-import type { IDebugAdapter, BreakpointLocation, VariableInfo } from '@tacv/core/interfaces';
-import type { BreakpointHit } from '@tacv/core/state';
+import type { IDebugAdapter, BreakpointLocation, VariableInfo } from '@tacv/contracts';
+import type { BreakpointHit } from '@tacv/contracts';
 import { createLogger } from '@tacv/core/observability';
 
 const log = createLogger('tacv.debugger.cdp');

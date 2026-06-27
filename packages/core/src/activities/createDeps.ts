@@ -3,52 +3,40 @@ import type { WorkflowConfig } from '../config/index.js';
 
 /**
  * Factory that wires all concrete providers into the ActivityDeps contract.
- * Called once at worker startup. Each activity is then a closure over these deps.
+ * Called once at worker startup.
  *
- * Providers are injected via environment variables or explicit config so the
- * worker remains vendor-agnostic. Swap ClaudeAgentProvider for any IAgentProvider
- * without touching the workflows.
+ * Language plugins are constructed with config pulled from
+ * `WorkflowConfig.languageConfig`, so adding a new language is a two-step:
+ *   1. Publish a `@tacv/plugin-<lang>` package implementing ILanguagePlugin.
+ *   2. Register it here and (optionally) add a `languageConfig.<lang>` section.
+ * No other files need to change.
  */
 export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> {
   const { createLogger } = await import('../observability/logger.js');
   const log = createLogger('tacv.worker');
 
-  // ── Agent provider — tiered construction ────────────────────────────────────
-  //
-  // Tier 1 (preferred): @anthropic-ai/claude-agent-sdk via ClaudeAgentSdkProvider
-  //   - Built-in tool execution (Read, Write, Bash, Glob, Grep)
-  //   - No manual turn loop — SDK manages turns via maxTurns
-  //   - permissionMode='acceptEdits' with Docker/Firecracker as the security boundary
-  //   - Agent SDK's own sandbox is intentionally disabled
-  //
-  // Tier 2 (fallback): @anthropic-ai/sdk via ClaudeAgentProvider
-  //   - Used when the Agent SDK binary is unavailable (CI, restricted envs)
-  //   - Functionally equivalent via the IAgentProvider interface
-  //
-  // Tier 3 (stub): StubAgentProvider — for local dev without API keys
-  //
+  // ── Agent provider — tiered construction ─────────────────────────────────
   let agent: ActivityDeps['agent'];
   try {
     const { ClaudeAgentSdkProvider } = await import('@tacv/provider-claude');
     const { LangfuseTracingAgent }   = await import('@tacv/provider-claude');
     const { BudgetAwareAgent }       = await import('./infrastructure/BudgetAwareAgent.js');
 
-    // No API key in constructor — the Agent SDK reads ANTHROPIC_API_KEY from env
     const base = new ClaudeAgentSdkProvider({
-      model:          config.agentModel,
+      model: config.agentModel,
       costPerMInput:  config.tokenBudget.costPerMInput,
       costPerMOutput: config.tokenBudget.costPerMOutput,
     });
-
     const traced = config.langfuse.enabled && config.langfuse.publicKey
-      ? new LangfuseTracingAgent(base, `tacv-worker-${Date.now()}`, { publicKey: config.langfuse.publicKey, secretKey: config.langfuse.secretKey ?? '' })
+      ? new LangfuseTracingAgent(base, `tacv-worker-${Date.now()}`, {
+          publicKey: config.langfuse.publicKey,
+          secretKey: config.langfuse.secretKey ?? '',
+        })
       : base;
-
     agent = new BudgetAwareAgent(traced, config.tokenBudget);
     log.info('createDeps.using_agent_sdk');
   } catch (sdkErr) {
-    log.warn('createDeps.agent_sdk_unavailable_falling_back_to_classic_sdk', { error: String(sdkErr) });
-    // Tier 2: classic @anthropic-ai/sdk provider with manual tool loop
+    log.warn('createDeps.agent_sdk_unavailable', { error: String(sdkErr) });
     try {
       const { ClaudeAgentProvider }  = await import('@tacv/provider-claude');
       const { LangfuseTracingAgent } = await import('@tacv/provider-claude');
@@ -60,37 +48,44 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
         costPerMInput:  config.tokenBudget.costPerMInput,
         costPerMOutput: config.tokenBudget.costPerMOutput,
       });
-
       const traced = config.langfuse.enabled && config.langfuse.publicKey
-        ? new LangfuseTracingAgent(base, `tacv-worker-${Date.now()}`, { publicKey: config.langfuse.publicKey, secretKey: config.langfuse.secretKey ?? '' })
+        ? new LangfuseTracingAgent(base, `tacv-worker-${Date.now()}`, {
+            publicKey: config.langfuse.publicKey,
+            secretKey: config.langfuse.secretKey ?? '',
+          })
         : base;
-
       agent = new BudgetAwareAgent(traced, config.tokenBudget);
       log.info('createDeps.using_classic_sdk');
     } catch {
-      // Tier 3: in-memory stub for local development without API credentials
       log.warn('createDeps.claude_unavailable_using_stub');
       const { StubAgentProvider } = await import('@tacv/stubs');
       agent = new StubAgentProvider();
     }
   }
 
-  // Structured extractor — Instructor + base Anthropic SDK
+  // ── Structured extractor ──────────────────────────────────────────────────
   let extractor: ActivityDeps['extractor'];
   try {
     const { ClaudeStructuredExtractor } = await import('@tacv/provider-claude');
-    extractor = new ClaudeStructuredExtractor({ apiKey: process.env['ANTHROPIC_API_KEY'] ?? '', defaultModel: 'claude-haiku-4-5-20251001' });
+    extractor = new ClaudeStructuredExtractor({
+      apiKey: process.env['ANTHROPIC_API_KEY'] ?? '',
+      defaultModel: 'claude-haiku-4-5-20251001',
+    });
   } catch {
     const { StubStructuredExtractor } = await import('@tacv/stubs');
     extractor = new StubStructuredExtractor({});
   }
 
-  // Memory provider
+  // ── Memory provider ───────────────────────────────────────────────────────
   let memory: ActivityDeps['memory'];
   if (config.mem0VectorStore !== 'in-memory') {
     try {
       const { Mem0MemoryProvider } = await import('@tacv/provider-mem0');
-      memory = new Mem0MemoryProvider({ apiKey: process.env['ANTHROPIC_API_KEY'] ?? '', vectorStore: config.mem0VectorStore, vectorStoreConfig: config.mem0Config as Record<string, unknown> });
+      memory = new Mem0MemoryProvider({
+        apiKey:             process.env['ANTHROPIC_API_KEY'] ?? '',
+        vectorStore:        config.mem0VectorStore,
+        vectorStoreConfig:  config.mem0Config as Record<string, unknown>,
+      });
     } catch {
       const { InMemoryProvider } = await import('@tacv/memory');
       memory = new InMemoryProvider();
@@ -100,7 +95,7 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
     memory = new InMemoryProvider();
   }
 
-  // Sandbox provider
+  // ── Sandbox provider ──────────────────────────────────────────────────────
   let sandbox: ActivityDeps['sandbox'];
   try {
     const { DockerSandboxProvider } = await import('@tacv/provider-docker');
@@ -110,11 +105,10 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
     sandbox = new StubSandboxProvider();
   }
 
-  // Code graph
+  // ── Code graph ────────────────────────────────────────────────────────────
   const { CodeGraphService } = await import('@tacv/code-graph');
-  const codeGraph = new CodeGraphService();
 
-  // Library docs
+  // ── Library docs ──────────────────────────────────────────────────────────
   let libraryDocs: ActivityDeps['libraryDocs'];
   if (config.libraryDocs.provider === 'context7') {
     try {
@@ -129,26 +123,75 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
     libraryDocs = new DisabledDocsProvider();
   }
 
-  // Language plugin registry
+  // ── Language plugin registry ──────────────────────────────────────────────
+  //
+  // Each plugin is constructed with values from `config.languageConfig[langId]`.
+  // To add a new language:
+  //   1. Install the plugin package.
+  //   2. Add a try/catch block below mirroring the TypeScript or Java pattern.
+  //   3. Optionally add a `languageConfig.<langId>` section to tacv.json.
+  //
   const { LanguagePluginRegistry } = await import('@tacv/language-plugins-base');
-  const pluginRegistry = new LanguagePluginRegistry();
+  const pluginRegistry             = new LanguagePluginRegistry();
+
+  // ── TypeScript / JavaScript ───────────────────────────────────────────────
   try {
-    const { TypeScriptPlugin } = await import('@tacv/plugin-typescript');
-    const { ReactProfile, FastifyProfile, VueProfile, ExpressProfile, NextJsProfile } = await import('@tacv/plugin-typescript');
-    pluginRegistry.register(new TypeScriptPlugin([new ReactProfile(), new FastifyProfile(), new VueProfile(), new ExpressProfile(), new NextJsProfile()]));
-  } catch (e) { log.warn('createDeps.ts_plugin_unavailable', { error: String(e) }); }
+    const {
+      TypeScriptPlugin,
+      ReactProfile, FastifyProfile, VueProfile, ExpressProfile, NextJsProfile,
+    } = await import('@tacv/plugin-typescript');
+
+    const tsConf = config.languageConfig?.['typescript'] ?? {};
+    pluginRegistry.register(new TypeScriptPlugin(
+      [new ReactProfile(), new FastifyProfile(), new VueProfile(), new ExpressProfile(), new NextJsProfile()],
+      {
+        userSrcRoot: tsConf.userSrcRoot ?? config.debug.userTsSrcRoot ?? 'src',
+        debugPort:   tsConf.debugPort   ?? config.debug.cdpPort       ?? 9229,
+      },
+    ));
+    log.info('createDeps.plugin_registered', { languageId: 'typescript' });
+  } catch (e) {
+    log.warn('createDeps.ts_plugin_unavailable', { error: String(e) });
+  }
+
+  // ── Java / Spring Boot ────────────────────────────────────────────────────
   try {
-    const { JavaPlugin } = await import('@tacv/plugin-java');
-    const { SpringBootProfile } = await import('@tacv/plugin-java');
-    pluginRegistry.register(new JavaPlugin([new SpringBootProfile()]));
-  } catch (e) { log.warn('createDeps.java_plugin_unavailable', { error: String(e) }); }
+    const { JavaPlugin, SpringBootProfile } = await import('@tacv/plugin-java');
+
+    const javaConf = config.languageConfig?.['java'] ?? {};
+    pluginRegistry.register(new JavaPlugin(
+      [new SpringBootProfile()],
+      {
+        userPackage:     javaConf.userPackage     ?? config.debug.userJavaPackage ?? 'com.example',
+        debugPort:       javaConf.debugPort       ?? config.debug.jdwpPort        ?? 5005,
+        actuatorBaseUrl: javaConf.actuatorBaseUrl ?? config.debug.actuatorBaseUrl ?? 'http://localhost:8080/actuator',
+      },
+    ));
+    log.info('createDeps.plugin_registered', { languageId: 'java' });
+  } catch (e) {
+    log.warn('createDeps.java_plugin_unavailable', { error: String(e) });
+  }
+
+  // ── Python (example third-party plugin — will gracefully skip if not installed) ──
+  try {
+    const { PythonPlugin } = await import('@tacv/plugin-python');
+    const pyConf = config.languageConfig?.['python'] ?? {};
+    pluginRegistry.register(new PythonPlugin({ debugPort: pyConf.debugPort ?? 5678 }));
+    log.info('createDeps.plugin_registered', { languageId: 'python' });
+  } catch { /* not installed — skip silently */ }
 
   return {
-    config, agent, extractor, memory, sandbox,
-    codeGraph: codeGraph as never, libraryDocs,
+    config,
+    agent,
+    extractor,
+    memory,
+    sandbox,
+    codeGraph:      new CodeGraphService() as never,
+    libraryDocs,
     pluginRegistry: pluginRegistry as unknown as LanguagePluginRegistry,
-    log, repoPath: config.repoPath,
-    taskId: '',     // overridden per-activity call
-    sessionId: '',  // overridden per-activity call
+    log,
+    repoPath:  config.repoPath,
+    taskId:    '',   // overridden per-activity call
+    sessionId: '',   // overridden per-activity call
   };
 }

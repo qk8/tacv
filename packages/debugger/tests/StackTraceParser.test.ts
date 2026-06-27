@@ -1,42 +1,44 @@
 import { describe, it, expect } from 'vitest';
 import { StackTraceParser } from '../src/StackTraceParser.js';
+import type { IStackParser } from '@tacv/language-plugins-base';
+import type { StackFrame } from '@tacv/contracts';
 
-describe('StackTraceParser — Java', () => {
-  const parser = new StackTraceParser('java', 'com.example');
+// ── Helpers ────────────────────────────────────────────────────────────────
+function makeParser(frames: StackFrame[]): IStackParser {
+  return { parseAndPrune: () => frames };
+}
 
-  it('parses Java stack trace and flags user frames', () => {
-    const raw = `java.lang.NullPointerException
-  at com.example.service.UserService.findById(UserService.java:45)
-  at com.example.controller.UserController.getUser(UserController.java:23)
-  at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:897)
-  at javax.servlet.http.HttpServlet.service(HttpServlet.java:764)`;
-    const frames = parser.parseAndPrune(raw, 'backend');
-    expect(frames.length).toBeGreaterThan(0);
-    expect(frames.every(f => f.isUser)).toBe(true);
-    expect(frames[0]?.file).toContain('UserService.java');
+describe('StackTraceParser — plugin-delegated coordinator', () => {
+  it('delegates to the plugin-provided IStackParser', () => {
+    const pluginParser = makeParser([
+      { file: 'UserService.java', line: 45, method: 'com.example.UserService.findById', isUser: true },
+    ]);
+    const coordinator = new StackTraceParser(pluginParser);
+    const frames = coordinator.parseAndPrune('any raw output', 'backend');
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.file).toBe('UserService.java');
   });
 
-  it('excludes Spring framework frames', () => {
-    const raw = `  at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1072)`;
-    const frames = parser.parseAndPrune(raw, 'backend');
-    expect(frames.filter(f => f.isUser)).toHaveLength(0);
-  });
-});
-
-describe('StackTraceParser — TypeScript', () => {
-  const parser = new StackTraceParser('typescript', undefined, 'src');
-
-  it('parses Node.js stack trace', () => {
-    const raw = `TypeError: Cannot read properties of undefined (reading 'id')
-    at UserService.findById (src/services/UserService.ts:45:18)
-    at /app/node_modules/express/lib/router/layer.js:95:5`;
-    const frames = parser.parseAndPrune(raw, 'backend');
-    expect(frames.some(f => f.file.includes('UserService'))).toBe(true);
-    expect(frames.some(f => f.file.includes('node_modules'))).toBe(false);
+  it('returns empty array when plugin parser finds no frames', () => {
+    const coordinator = new StackTraceParser(makeParser([]));
+    expect(coordinator.parseAndPrune('BUILD SUCCESS', 'backend')).toHaveLength(0);
   });
 
-  it('returns empty for output with no recognizable stack', () => {
-    const frames = parser.parseAndPrune('Build failed: syntax error', 'backend');
-    expect(frames).toHaveLength(0);
+  it('preserves all frame fields from plugin parser', () => {
+    const frame: StackFrame = { file: 'Foo.ts', line: 10, method: 'bar', isUser: true };
+    const coordinator = new StackTraceParser(makeParser([frame]));
+    const result = coordinator.parseAndPrune('', 'backend')[0];
+    expect(result?.file).toBe('Foo.ts');
+    expect(result?.line).toBe(10);
+    expect(result?.method).toBe('bar');
+    expect(result?.isUser).toBe(true);
+  });
+
+  it('limits results to 10 frames', () => {
+    const manyFrames: StackFrame[] = Array.from({ length: 20 }, (_, i) => ({
+      file: `File${i}.ts`, line: i, method: `method${i}`, isUser: true,
+    }));
+    const coordinator = new StackTraceParser(makeParser(manyFrames));
+    expect(coordinator.parseAndPrune('', 'backend')).toHaveLength(10);
   });
 });

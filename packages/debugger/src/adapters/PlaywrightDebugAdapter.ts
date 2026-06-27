@@ -1,5 +1,5 @@
-import type { DebugObservations } from '@tacv/core/state';
-import type { ISandboxProvider, SandboxHandle } from '@tacv/core/interfaces';
+import type { DebugObservations } from '@tacv/contracts';
+import type { ISandboxProvider, SandboxHandle } from '@tacv/contracts';
 import { createLogger } from '@tacv/core/observability';
 
 const log = createLogger('tacv.debugger.playwright');

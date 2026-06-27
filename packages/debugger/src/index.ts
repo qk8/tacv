@@ -1,11 +1,5 @@
-export { IntelligentDebugger }         from './IntelligentDebugger.js';
-export { StackTraceParser }            from './StackTraceParser.js';
-export { classifyError, selectStrategy } from './DebugStrategySelector.js';
-export type { DebugStrategy, DebugTool } from './DebugStrategySelector.js';
-export { CdpDebugAdapter }             from './adapters/CdpDebugAdapter.js';
-export { JdwpDebugAdapter }            from './adapters/JdwpDebugAdapter.js';
-export { DapDebugAdapter }             from './adapters/DapDebugAdapter.js';
-export { PlaywrightDebugAdapter }      from './adapters/PlaywrightDebugAdapter.js';
-export { BreakpointStrategy }          from './strategies/BreakpointStrategy.js';
-export { DeltaDebugStrategy }          from './strategies/DeltaDebugStrategy.js';
-export { ActuatorQueryStrategy }       from './strategies/ActuatorQueryStrategy.js';
+export { IntelligentDebugger }   from './IntelligentDebugger.js';
+export { StackTraceParser }      from './StackTraceParser.js';
+export { DebugStrategySelector, classifyError, classifyErrorWithPlugin, selectStrategy } from './DebugStrategySelector.js';
+export { createDebugAdapter, buildLaunchCmd } from './DebugAdapterFactory.js';
+export type { DebugTool, DebugStrategy }      from './DebugStrategySelector.js';

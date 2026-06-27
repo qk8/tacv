@@ -10,24 +10,34 @@ export async function debuggerImpl(state: WorkflowState, deps: ActivityDeps): Pr
 
   log.info('debugger_activity.start', { taskId: state.taskId, errorCount: verdict.testFailures.length });
 
+  const langId = state.task.languageIds[0] ?? 'typescript';
+  const plugin = deps.pluginRegistry.get(langId);
+
   try {
     // Use the full IntelligentDebugger from @tacv/debugger if available
-    const { IntelligentDebugger } = await import('@tacv/debugger');
-    const langId = state.task.languageIds[0] ?? 'typescript';
+    const { IntelligentDebugger, createDebugAdapter, buildLaunchCmd } = await import('@tacv/debugger');
 
     const debugger_ = new IntelligentDebugger({
       agent:   deps.agent,
       sandbox: deps.sandbox,
+      // ★ New: use plugin spec + factory instead of the old broken getDebugAdapter() stubs
       getDebugAdapter: (lid: string) => {
-        try { return deps.pluginRegistry.get(lid).getDebugAdapter(); } catch { return null; }
+        try {
+          const spec = deps.pluginRegistry.get(lid).getDebugAdapterSpec?.();
+          return spec ? createDebugAdapter(spec) : null;
+        } catch { return null; }
       },
       getLaunchConfig: (lid: string, _repoPath: string) => {
-        try { const cfg = deps.pluginRegistry.get(lid).getDebugLaunchConfig(deps.repoPath); return cfg as import('@tacv/debugger').BreakpointStrategy extends never ? never : { type: string; launchCmd: string; cwd: string; debugPort: number }; } catch { return null; }
+        try {
+          const spec = deps.pluginRegistry.get(lid).getDebugAdapterSpec?.();
+          if (!spec) return null;
+          return { type: spec.protocol, launchCmd: buildLaunchCmd(spec), cwd: '.', debugPort: spec.defaultPort };
+        } catch { return null; }
       },
       actuatorBaseUrl: deps.config.debug.actuatorBaseUrl,
       frontendBaseUrl: deps.config.frontendBaseUrl,
-      userJavaPackage: deps.config.debug.userJavaPackage,
-      userTsSrcRoot:   deps.config.debug.userTsSrcRoot,
+      userJavaPackage: deps.config.languageConfig?.['java']?.userPackage ?? 'com.example',
+      userTsSrcRoot:   deps.config.languageConfig?.['typescript']?.userSrcRoot ?? 'src',
     });
 
     const observations = await debugger_.debug(state);
@@ -46,12 +56,16 @@ export async function debuggerImpl(state: WorkflowState, deps: ActivityDeps): Pr
   } catch (err) {
     log.error('debugger_activity.failed', { error: String(err) });
     // Fallback: text-only analysis without live debugging
-    return _fallbackTextAnalysis(state, deps);
+    return _fallbackTextAnalysis(state, deps, langId);
   }
 }
 
-async function _fallbackTextAnalysis(state: WorkflowState, deps: ActivityDeps): Promise<WorkflowState> {
-  const failures = state.verifierVerdict?.testFailures ?? [];
+async function _fallbackTextAnalysis(
+  state:  WorkflowState,
+  deps:   ActivityDeps,
+  langId: string,
+): Promise<WorkflowState> {
+  const failures  = state.verifierVerdict?.testFailures ?? [];
   const rawOutput = failures.map(f => f.message).join('\n');
 
   let rootCause = '';
@@ -65,16 +79,16 @@ async function _fallbackTextAnalysis(state: WorkflowState, deps: ActivityDeps): 
     rootCause = result.content.trim().slice(0, 500);
   } catch { /* non-critical */ }
 
-  // ★ REDESIGN: pattern-based error type classification in fallback
-  // The original hardcoded 'UNKNOWN'; now we classify from the stack trace text
-  // so the actor receives a useful errorType even without live debugging.
-  const errorType = classifyErrorType(rawOutput);
+  // ★ Delegate error classification to the plugin — no more hardcoded pattern tables here
+  const { classifyErrorWithPlugin } = await import('@tacv/debugger');
+  const plugin    = deps.pluginRegistry.get(langId);
+  const errorType = classifyErrorWithPlugin(rawOutput, plugin);
 
   return {
     ...state,
     currentPhase: 'ACTOR',
     debugObservations: {
-      errorType:           errorType,
+      errorType,
       rootCause:           rootCause || '(text analysis only — live debug unavailable)',
       breakpointHits:      [],
       actuatorBeans:       null,
@@ -88,33 +102,4 @@ async function _fallbackTextAnalysis(state: WorkflowState, deps: ActivityDeps): 
       decision: 'fallback_text_analysis', keyValues: { rootCauseLen: rootCause.length },
     }],
   };
-}
-
-/** Pattern-based error type classification — used when live debug is unavailable. */
-function classifyErrorType(rawOutput: string): string {
-  const t = rawOutput.toLowerCase();
-
-  // Java patterns
-  if (/nullpointerexception|npe at /.test(t))          return 'NULL_REFERENCE';
-  if (/beancreationexception|error creating bean/.test(t)) return 'BEAN_CREATION_ERROR';
-  if (/classcastexception/.test(t))                    return 'TYPE_MISMATCH';
-  if (/illegalargumentexception|illegal argument/.test(t)) return 'ILLEGAL_ARGUMENT';
-  if (/indexoutofboundsexception|arrayindexoutofbounds/.test(t)) return 'INDEX_OUT_OF_BOUNDS';
-  if (/stackoverflowerror|stack overflow/.test(t))     return 'STACK_OVERFLOW';
-  if (/outofmemoryerror|java.lang.out of memory/.test(t)) return 'OUT_OF_MEMORY';
-  if (/nosuchbeandefinitionexception|no qualifying bean/.test(t)) return 'BEAN_NOT_FOUND';
-  if (/hibernateexception|transactionrequiredexception/.test(t)) return 'DATABASE_ERROR';
-  if (/timeout|timed out/.test(t))                     return 'TIMEOUT';
-
-  // TypeScript / JavaScript patterns
-  if (/cannot read prop|cannot read properties of (undefined|null)/.test(t)) return 'NULL_REFERENCE';
-  if (/typeerror/.test(t))                             return 'TYPE_MISMATCH';
-  if (/referenceerror/.test(t))                        return 'REFERENCE_ERROR';
-  if (/syntaxerror/.test(t))                           return 'SYNTAX_ERROR';
-  if (/assertion.*failed|expected.*to.*be|assert\./.test(t)) return 'ASSERTION_FAILURE';
-  if (/econnrefused|connection refused|econnreset/.test(t)) return 'NETWORK_ERROR';
-  if (/ENOENT|no such file or directory/.test(t))      return 'FILE_NOT_FOUND';
-  if (/permission denied|eacces/.test(t))              return 'PERMISSION_DENIED';
-
-  return 'UNKNOWN';
 }
