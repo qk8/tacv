@@ -1,7 +1,7 @@
 import type { WorkflowState } from '../../state/schemas.js';
 import { TestFaultAssessment } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
-import { isTestFile } from '../critics/testPreservationCritic.js';
+import { isTestFile } from '../critics/shared.js';
 import { createLogger } from '../../observability/logger.js';
 
 const log = createLogger('tacv.test_validity');
@@ -15,15 +15,18 @@ export async function testValidityReviewImpl(state: WorkflowState, deps: Activit
 
   log.info('test_validity.start', { cycle: state.correctionCycle.attemptCount, failures: failures.length });
 
+  const langId = state.task.languageIds[0] ?? 'typescript';
+  const plugin = deps.pluginRegistry.get(langId);
+
   // Check if failures appear to originate in test files rather than production code
   const stack = state.debugObservations?.prunedStack ?? [];
   const testOriginFailures = failures.filter(f => {
     const failFile = f.file ?? '';
     // Failure in a test file, or stack trace entirely inside test files
-    return isTestFile(failFile) || (stack.length > 0 && stack.every(fr => isTestFile(fr.file)));
+    return isTestFile(failFile, plugin) || (stack.length > 0 && stack.every(fr => isTestFile(fr.file, plugin)));
   });
 
-  const diffContent = state.diffProposal?.diffs.filter(d => !isTestFile(d.filePath)).map(d => d.diffContent.slice(0,600)).join('\n---\n') ?? '';
+  const diffContent = state.diffProposal?.diffs.filter(d => !isTestFile(d.filePath, plugin)).map(d => d.diffContent.slice(0,600)).join('\n---\n') ?? '';
 
   let assessment: TestFaultAssessment;
   try {
