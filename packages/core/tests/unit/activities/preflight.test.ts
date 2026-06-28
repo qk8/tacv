@@ -18,12 +18,31 @@ describe('preflightImpl', () => {
     expect(result.currentPhase).toBe('CRITICS');
   });
 
-  it('collects type-check violations as critical findings', async () => {
+  it('does NOT call plugin.typeCheck — only lint', async () => {
     const deps = makeStubDeps();
-    const _savedPlugin1 = deps.pluginRegistry.get('ts');
-    deps.pluginRegistry = { get: () => ({ ..._savedPlugin1, typeCheck: async () => ({ violations: [{ file: 'src/a.ts', line: 3, ruleId: 'TS2345', message: 'Argument of type number is not assignable', resolutionHint: 'cast to correct type' }] }), lint: async () => ({ violations: [] }) } as never), getForFile: () => null };
-    const state = { ...createInitialState(task), diffProposal: { diffs: [{ filePath: 'src/a.ts', operation: 'modify' as const, diffContent: '+ fn(42 as any)', language: 'typescript' }], summary: '', testFilePaths: [] } };
+    let typeCheckCalled = false;
+    const _savedPlugin = deps.pluginRegistry.get('typescript');
+    deps.pluginRegistry = {
+      get: () => ({ ..._savedPlugin, typeCheck: async () => { typeCheckCalled = true; return { violations: [], durationMs: 0 }; }, lint: async () => ({ violations: [] }) } as never),
+      getForFile: () => null,
+    } as never;
+    const state = { ...createInitialState(task), diffProposal: { diffs: [{ filePath: 'src/a.ts', operation: 'modify' as const, diffContent: '+ fn(42)', language: 'typescript' }], summary: '', testFilePaths: [] } };
+    await preflightImpl(state as never, deps);
+    expect(typeCheckCalled).toBe(false);
+  });
+
+  it('collects lint violations as findings', async () => {
+    const deps = makeStubDeps();
+    const _savedPlugin = deps.pluginRegistry.get('typescript');
+    deps.pluginRegistry = {
+      get: () => ({
+        ..._savedPlugin,
+        lint: async () => ({ violations: [{ file: 'src/a.ts', line: 3, ruleId: 'no-console', message: 'console.log used', resolutionHint: 'use logger' }] }),
+      } as never),
+      getForFile: () => null,
+    } as never;
+    const state = { ...createInitialState(task), diffProposal: { diffs: [{ filePath: 'src/a.ts', operation: 'modify' as const, diffContent: '+ console.log("hi")', language: 'typescript' }], summary: '', testFilePaths: [] } };
     const result = await preflightImpl(state as never, deps);
-    expect(result.criticFindings.some(f => f.ruleId === 'TS2345')).toBe(true);
+    expect(result.criticFindings.some(f => f.ruleId === 'no-console')).toBe(true);
   });
 });

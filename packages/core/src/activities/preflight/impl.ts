@@ -17,15 +17,7 @@ export async function preflightImpl(state: WorkflowState, deps: ActivityDeps): P
     const langFiles = changedFiles.filter(f => plugin.metadata.extensions.some(e => f.endsWith(e)));
     if (langFiles.length === 0) continue;
 
-    // Type check
-    const typeResult = await plugin.typeCheck(deps.repoPath, langFiles);
-    findings.push(...typeResult.violations.map(v => ({
-      critic: 'style' as const, severity: 'critical' as const,
-      file: v.file, line: v.line, ruleId: v.ruleId,
-      message: v.message, resolutionHint: v.resolutionHint,
-    })));
-
-    // Lint
+    // Lint only — type-check is done in verifierTypeCheckStage with its own timeout/retry
     const lintResult = await plugin.lint(deps.repoPath, langFiles);
     findings.push(...lintResult.violations.map(v => ({
       critic: 'style' as const, severity: 'warning' as const,
