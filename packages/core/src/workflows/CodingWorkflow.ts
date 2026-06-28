@@ -277,6 +277,14 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
       }
 
       log.warn('workflow.speculative_all_failed', { branches: candidates.length });
+      // Mark all attempted candidates as exhausted so they are not retried
+      state = {
+        ...state,
+        exhaustedBranches: [
+          ...state.exhaustedBranches,
+          ...candidates.map(c => c.strategyId),
+        ],
+      };
       state = withPhase(state, 'HITL_ESCALATION');
       continue;
     }
