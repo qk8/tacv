@@ -43,6 +43,22 @@ export async function actorImpl(state: WorkflowState, deps: ActivityDeps): Promi
   const newCycle = { ...state.correctionCycle, attemptCount: attempt + 1, branchName: state.correctionCycle.branchName ?? 'main' };
   const newConf  = computeConfidenceScore({ ...state, correctionCycle: newCycle, cumulativeCostUsd: newCost }, deps.config);
 
+  // Cross-cycle scratchpad — concise summary for next actor invocation
+  const parts: string[] = [
+    `Cycle ${attempt + 1}: ${diffProposal?.summary ?? 'no diff produced'}.`,
+  ];
+  if (state.verifierVerdict?.testFailures?.[0]?.message) {
+    parts.push(`Last error: ${state.verifierVerdict.testFailures[0].message.slice(0, 200)}`);
+  }
+  if (state.correctionCycle.stagnationPattern !== 'none') {
+    parts.push(`Stagnation: ${state.correctionCycle.stagnationPattern}`);
+  }
+  const scratchpadEntry = parts.join(' ');
+
+  const accumulatedScratchpad = state.sessionScratchpad
+    ? `${state.sessionScratchpad}\n${scratchpadEntry}`
+    : scratchpadEntry;
+
   log.info('actor.complete', {
     attempt: attempt + 1, costDelta: result.callCostUsd.toFixed(4),
     diffFiles: diffProposal?.diffs.length ?? 0, promptVersion: ACTOR_PROMPT_VERSION,
@@ -55,6 +71,7 @@ export async function actorImpl(state: WorkflowState, deps: ActivityDeps): Promi
     correctionCycle:   newCycle,
     cumulativeCostUsd: newCost,
     confidenceScore:   newConf,
+    sessionScratchpad: accumulatedScratchpad,
     workflowAuditTrail: [...state.workflowAuditTrail, {
       timestampMs: Date.now(), node: 'actor',
       decision: 'diff_generated',
