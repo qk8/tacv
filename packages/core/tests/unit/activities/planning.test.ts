@@ -45,30 +45,19 @@ describe('implementationPlanImpl', () => {
     expect(result.implementationPlan?.fastCriticFindings).toHaveLength(0);
   });
 
-  it('still advances to TDD_GATE even when plan has critic warnings', async () => {
+  it('still advances to TDD_GATE even when plan has structural warnings', async () => {
+    // Plan with high complexity + many risky areas triggers PLAN_HIGH_RISK
+    const riskyPlan = {
+      ...minimalPlan,
+      estimatedComplexity: 'high' as const,
+      riskyAreas: ['area1', 'area2', 'area3', 'area4'],
+    };
     const deps = makeStubDeps();
-    deps.extractor = { extract: async () => minimalPlan as never };
-    // style critic finds a lint warning — should not block planning
-    const origPlugin = deps.pluginRegistry.get('typescript');
-    const lintOverride = {
-      ...origPlugin,
-      lint: async () => ({ violations: [{ file: 'src/auth/JwtService.ts', line: 5, ruleId: 'no-console', message: 'console.log', resolutionHint: 'use logger' }] }),
-    } as never;
-    deps.pluginRegistry = {
-      get: () => lintOverride,
-      getForFile: () => lintOverride,
-    };
-    const state = {
-      ...createInitialState(task),
-      diffProposal: {
-        diffs: [{ filePath: 'src/auth/JwtService.ts', operation: 'create' as const, diffContent: '+ console.log("hi")', language: 'typescript' }],
-        summary: 'auth', testFilePaths: [],
-      },
-    };
-    const result = await implementationPlanImpl(state, deps);
+    deps.extractor = { extract: async () => riskyPlan as never };
+    const result = await implementationPlanImpl(createInitialState(task), deps);
     expect(result.currentPhase).toBe('TDD_GATE');
     expect(result.implementationPlan?.criticsApproved).toBe(false);
-    expect(result.implementationPlan?.fastCriticFindings.length).toBeGreaterThan(0);
+    expect(result.implementationPlan?.fastCriticFindings.some(f => f.ruleId === 'PLAN_HIGH_RISK')).toBe(true);
   });
 
   it('skips planning and goes straight to TDD_GATE when disabled', async () => {
@@ -94,5 +83,57 @@ describe('implementationPlanImpl', () => {
     const entry = result.workflowAuditTrail.find(e => e.node === 'implementation_plan');
     expect(entry).toBeDefined();
     expect(entry?.decision).toBe('plan_created');
+  });
+
+  describe('plan structural validation (Bug 5: replaces dead diffProposal check)', () => {
+    const brownfieldTask = {
+      taskId: 'plan-bf', description: 'Fix login bug',
+      mode: 'BROWNFIELD' as const, moduleType: 'backend', languageIds: ['typescript'],
+    };
+
+    it('flags BROWNFIELD plans touching too many files as PLAN_TOO_BROAD', async () => {
+      const widePlan = {
+        ...minimalPlan,
+        filesToCreate: ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts', 'src/f.ts', 'src/g.ts', 'src/h.ts', 'src/i.ts', 'src/j.ts', 'src/k.ts'],
+        filesToModify: ['src/x.ts', 'src/y.ts'],
+      };
+      const deps = makeStubDeps();
+      deps.extractor = { extract: async () => widePlan as never };
+      const result = await implementationPlanImpl(createInitialState(brownfieldTask), deps);
+      const findings = result.implementationPlan?.fastCriticFindings ?? [];
+      expect(findings.some(f => f.ruleId === 'PLAN_TOO_BROAD')).toBe(true);
+    });
+
+    it('flags high complexity + many risky areas as PLAN_HIGH_RISK', async () => {
+      const riskyPlan = {
+        ...minimalPlan,
+        estimatedComplexity: 'high' as const,
+        riskyAreas: ['area1', 'area2', 'area3', 'area4'],
+      };
+      const deps = makeStubDeps();
+      deps.extractor = { extract: async () => riskyPlan as never };
+      const result = await implementationPlanImpl(createInitialState(brownfieldTask), deps);
+      const findings = result.implementationPlan?.fastCriticFindings ?? [];
+      expect(findings.some(f => f.ruleId === 'PLAN_HIGH_RISK')).toBe(true);
+    });
+
+    it('flags plan with source files but no test files as PLAN_NO_TEST_FILES', async () => {
+      const noTestPlan = {
+        ...minimalPlan,
+        testFilesToCreate: [],
+      };
+      const deps = makeStubDeps();
+      deps.extractor = { extract: async () => noTestPlan as never };
+      const result = await implementationPlanImpl(createInitialState(brownfieldTask), deps);
+      const findings = result.implementationPlan?.fastCriticFindings ?? [];
+      expect(findings.some(f => f.ruleId === 'PLAN_NO_TEST_FILES')).toBe(true);
+    });
+
+    it('sets criticsApproved=false when structural warnings exist', async () => {
+      const deps = makeStubDeps();
+      deps.extractor = { extract: async () => ({ ...minimalPlan, testFilesToCreate: [] }) as never };
+      const result = await implementationPlanImpl(createInitialState(brownfieldTask), deps);
+      expect(result.implementationPlan?.criticsApproved).toBe(false);
+    });
   });
 });
