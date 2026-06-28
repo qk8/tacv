@@ -105,15 +105,50 @@ Return a JSON object matching the ScoutOutput schema.
 `.trim();
 }
 
-async function detectDependencies(repoPath: string): Promise<Array<{ name: string; version: string; ecosystem: 'npm' | 'maven' | 'gradle' | 'pip' }>> {
+export async function detectDependencies(repoPath: string): Promise<Array<{ name: string; version: string; ecosystem: 'npm' | 'maven' | 'gradle' | 'pip' }>> {
   const deps: Array<{ name: string; version: string; ecosystem: 'npm' | 'maven' | 'gradle' | 'pip' }> = [];
+  const { readFile } = await import('node:fs/promises');
+
+  // ── NPM ────────────────────────────────────────────────────────────────────
   try {
-    const { readFile } = await import('node:fs/promises');
     const pkg = JSON.parse(await readFile(`${repoPath}/package.json`, 'utf8')) as Record<string, unknown>;
     const allDeps = { ...pkg['dependencies'] as Record<string,string>, ...pkg['devDependencies'] as Record<string,string> };
     for (const [name, version] of Object.entries(allDeps)) {
       deps.push({ name, version: String(version), ecosystem: 'npm' });
     }
   } catch { /* not a Node project */ }
+
+  // ── Maven ──────────────────────────────────────────────────────────────────
+  try {
+    const pom = await readFile(`${repoPath}/pom.xml`, 'utf8');
+    const depMatches = pom.matchAll(/<dependency>(?:[^<]|<!--[\s\S]*?-->)*<groupId>([^<]+)<\/groupId>(?:[^<]|<!--[\s\S]*?-->)*<artifactId>([^<]+)<\/artifactId>(?:[^<]|<!--[\s\S]*?-->)*(?:<version>([^<]+)<\/version>)?(?:[^<]|<!--[\s\S]*?-->)*<\/dependency>/g);
+    for (const m of depMatches) {
+      if (m[2]) deps.push({ name: `${m[1]}:${m[2]}`, version: m[3] ?? 'managed', ecosystem: 'maven' });
+    }
+  } catch { /* not a Maven project */ }
+
+  // ── Gradle (build.gradle) ─────────────────────────────────────────────────
+  try {
+    const gradle = await readFile(`${repoPath}/build.gradle`, 'utf8');
+    const depMatches = gradle.matchAll(/(?:implementation|api|compileOnly|runtimeOnly)\s+'([^']+)'/g);
+    for (const m of depMatches) {
+      const parts = m[1].split(':');
+      if (parts.length >= 3) {
+        deps.push({ name: `${parts[0]}:${parts[1]}`, version: parts[2], ecosystem: 'gradle' });
+      }
+    }
+  } catch { /* not a Gradle project */ }
+
+  // ── Pip (requirements.txt) ────────────────────────────────────────────────
+  try {
+    const lines = (await readFile(`${repoPath}/requirements.txt`, 'utf8')).split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const [name, ...rest] = trimmed.split('==');
+      if (name) deps.push({ name: name.trim(), version: rest.join('==').trim() || 'latest', ecosystem: 'pip' });
+    }
+  } catch { /* not a Python project */ }
+
   return deps.slice(0, 20);
 }
