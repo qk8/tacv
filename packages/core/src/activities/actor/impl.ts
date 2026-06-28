@@ -84,7 +84,7 @@ After making changes, output a JSON code block with your diff:
 }
 
 /** Compressed prompt — only current-cycle context, not accumulating history */
-function buildCompressedActorPrompt(state: WorkflowState, maxCycles: number): string {
+export function buildCompressedActorPrompt(state: WorkflowState, maxCycles: number): string {
   const attempt = state.correctionCycle.attemptCount;
   const remaining = maxCycles - attempt;
   const budgetLeft = (state.cumulativeCostUsd > 0)
@@ -95,6 +95,29 @@ function buildCompressedActorPrompt(state: WorkflowState, maxCycles: number): st
     `## Task\n${state.task.description}`,
     `## Attempt ${attempt + 1} of ${maxCycles} (${remaining} remaining)${budgetLeft}`,
   ];
+
+  // Implementation plan — persistent anchor to prevent context drift
+  if (state.implementationPlan) {
+    const plan = state.implementationPlan;
+    const planLines: string[] = [
+      `## Implementation Plan (follow this to avoid scope creep)`,
+      `**Summary:** ${plan.planSummary}`,
+    ];
+    if (plan.filesToCreate.length > 0) planLines.push(`**Create:** ${plan.filesToCreate.join(', ')}`);
+    if (plan.filesToModify.length > 0) planLines.push(`**Modify:** ${plan.filesToModify.join(', ')}`);
+    if (plan.filesToDelete.length > 0) planLines.push(`**Delete:** ${plan.filesToDelete.join(', ')}`);
+    if (plan.testFilesToCreate.length > 0) planLines.push(`**Test files:** ${plan.testFilesToCreate.join(', ')}`);
+    if (plan.riskyAreas.length > 0) planLines.push(`**Risky areas (extra tests needed):** ${plan.riskyAreas.join('; ')}`);
+    if (!plan.criticsApproved && plan.fastCriticFindings.length > 0) {
+      planLines.push(`**Plan warnings:** ${plan.fastCriticFindings.map(f => f.message).join('; ')}`);
+    }
+    parts.push(planLines.join('\n'));
+  }
+
+  // Session scratchpad — accumulated notes across cycles
+  if (state.sessionScratchpad) {
+    parts.push(`## Session Notes\n${state.sessionScratchpad.slice(0, 500)}`);
+  }
 
   // Current-cycle failures only — NOT all historical failures
   const currentFailures = state.verifierVerdict?.testFailures?.slice(0, 8) ?? [];
