@@ -303,9 +303,15 @@ export async function verifierApiStage(
       verifierVerdict: passVerdict(state),
     };
   } catch (err) {
-    log.warn('verifier.api.error', { error: String(err) });
-    // API test errors are non-fatal for non-critical services
-    return { ...state, verifierVerdict: passVerdict(state) };
+    log.warn('verifier.api.error_treated_as_skip', { error: String(err) });
+    return withAuditEntry({
+      ...state,
+      verifierVerdict: passVerdict(state),
+    }, {
+      node: 'verifier_api',
+      decision: 'SKIPPED_ERROR',
+      keyValues: { error: String(err).slice(0, 200), hint: 'API tests failed to start — check test command config' },
+    });
   }
 }
 
@@ -362,9 +368,15 @@ export async function verifierMutationStage(
     log.info('verifier.mutation.pass', { score: mutResult.mutationScore });
     return { ...state, mutationResult: mutResult, verifierVerdict: passVerdict(state) };
   } catch (err) {
-    log.warn('verifier.mutation.error', { error: String(err) });
-    // Mutation errors don't block — treat as PASS (test coverage still ran in Stage 2)
-    return { ...state, verifierVerdict: passVerdict(state) };
+    log.warn('verifier.mutation.error_treated_as_skip', { error: String(err) });
+    return withAuditEntry({
+      ...state,
+      verifierVerdict: passVerdict(state),
+    }, {
+      node: 'verifier_mutation',
+      decision: 'SKIPPED_ERROR',
+      keyValues: { error: String(err).slice(0, 200), hint: 'Mutation testing failed to start — verify mutant runner config' },
+    });
   }
 }
 
