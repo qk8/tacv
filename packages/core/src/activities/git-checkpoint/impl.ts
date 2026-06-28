@@ -41,16 +41,16 @@ export async function gitCheckpointImpl(
   let commitHash: string | null = null;
 
   try {
-    await runGit(`git checkout -B ${branch}`, deps.repoPath);
+    await runGitArgs(['checkout', '-B', branch], deps.repoPath);
     if (changedFiles.length > 0) {
-      await runGit(`git add ${changedFiles.map(f => `"${f}"`).join(' ')}`, deps.repoPath);
+      await runGitArgs(['add', '--', ...changedFiles], deps.repoPath);
       const msg = `tacv(cycle-${cycleNumber}): ${state.task.description.slice(0, 60)}`;
-      await runGit(
-        `git -c user.name="${cfg.authorName}" -c user.email="${cfg.authorEmail}" commit -m "${msg}" --allow-empty`,
-        deps.repoPath,
-      );
-      const { stdout } = await execAsync('git rev-parse HEAD', { cwd: deps.repoPath });
-      commitHash = stdout.trim();
+      await runGitArgs([
+        '-c', `user.name=${cfg.authorName}`,
+        '-c', `user.email=${cfg.authorEmail}`,
+        'commit', '-m', msg, '--allow-empty',
+      ], deps.repoPath);
+      commitHash = await runGitArgs(['rev-parse', 'HEAD'], deps.repoPath);
     }
     log.info('git_checkpoint.committed', { hash: commitHash, branch });
   } catch (err) {
@@ -76,11 +76,7 @@ export async function gitCheckpointImpl(
   };
 }
 
-async function runGit(cmd: string, cwd: string): Promise<string> {
-  // Parse command string into file + args to avoid shell interpretation.
-  // execFile does NOT invoke a shell, so $() backticks etc. are safe literal data.
-  const parts = cmd.trim().split(/\s+/);
-  const [file, ...args] = parts;
-  const { stdout } = await execFileAsync(file!, args, { cwd });
+async function runGitArgs(args: string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, { cwd });
   return stdout.trim();
 }
