@@ -1,4 +1,5 @@
 import { trace, SpanStatusCode, context } from '@opentelemetry/api';
+import { Context } from '@temporalio/activity';
 import { createLogger } from './logger.js';
 
 const log    = createLogger('tacv.activity.interceptor');
@@ -15,7 +16,11 @@ export class ObservabilityInterceptor implements ActivityInboundCallsInterceptor
     input: { headers: Record<string, Buffer | undefined> },
     next:  (input: unknown) => Promise<unknown>,
   ): Promise<unknown> {
-    const activityName = (input.headers['activityName'] as Buffer | undefined)?.toString() ?? 'unknown';
+    // Read activity name from Temporal's Context (correct API) with header fallback
+    const activityName = (() => {
+      try { return Context.current().info.activityType; }
+      catch { return (input.headers['activityName'] as Buffer | undefined)?.toString() ?? 'unknown'; }
+    })();
     const span = tracer.startSpan(`tacv.activity.${activityName}`);
     const ctx  = trace.setSpan(context.active(), span);
     const t0   = performance.now();
