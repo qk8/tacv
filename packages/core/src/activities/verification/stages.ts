@@ -190,35 +190,34 @@ export async function verifierTestsStage(
       }, { node: 'verifier_tests', decision: 'FAIL_ACCEPTANCE', keyValues: { count: accResult.failedTests } });
     }
 
-    // ── Coverage check (non-blocking warning only) ──────────────────────────
+    // ── Coverage check (hard fail — blocks progression) ─────────────────────
     const coverageReport = accResult.coverageReport ?? protResult.coverageReport;
     const baselineCoverage = state.baselineTestResult?.coverageReport;
     if (coverageReport && baselineCoverage) {
       const coverageOk = checkCoverageRegression(baselineCoverage, coverageReport, deps.config.coverage);
       if (!coverageOk.passed) {
         log.warn('verifier.tests.coverage_regression', { violations: coverageOk.violations });
-        // Coverage regression is a soft fail — record it but don't block
-        return {
+        return withAuditEntry({
           ...state,
           verifierVerdict: failVerdict(
             coverageOk.violations.map(v => ({ testName: 'coverage', message: v.message })),
             'FIX_TEST',
             state,
           ),
-        };
+        }, { node: 'verifier_tests', decision: 'FAIL_COVERAGE', keyValues: { violations: coverageOk.violations } });
       }
     } else if (coverageReport && !baselineCoverage) {
-      // No baseline available — check against minimum threshold only
+      // No baseline available — check against minimum threshold
       const minLine = deps.config.coverage.minimumLineCoverage;
       if (coverageReport.lines < minLine) {
-        return {
+        return withAuditEntry({
           ...state,
           verifierVerdict: failVerdict(
             [{ testName: 'coverage', message: `Line coverage ${coverageReport.lines.toFixed(1)}% < minimum ${minLine}%` }],
             'FIX_TEST',
             state,
           ),
-        };
+        }, { node: 'verifier_tests', decision: 'FAIL_COVERAGE', keyValues: { coverage: coverageReport.lines } });
       }
     }
   } catch (err) {

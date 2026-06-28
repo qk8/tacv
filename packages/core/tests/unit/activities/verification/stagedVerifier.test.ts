@@ -116,6 +116,48 @@ describe('verifierTestsStage', () => {
     const result = await verifierTestsStage(state as never, makeStubDeps());
     expect(result.verifierVerdict?.diagnostic).toBe('AMBIGUOUS'); // unchanged
   });
+
+  it('returns FAIL when coverage regresses below baseline', async () => {
+    const deps = makeStubDeps();
+    const orig = deps.pluginRegistry.get('typescript');
+    deps.pluginRegistry = {
+      get: () => ({
+        ...orig,
+        runProtectionTests: async () => ({ passed: true, totalTests: 3, failedTests: 0, failures: [], coverageReport: { lines: 75, branches: 60, functions: 80, statements: 76 }, durationMs: 50 }),
+        runAcceptanceTests: async () => ({ passed: true, totalTests: 1, failedTests: 0, failures: [], coverageReport: { lines: 70, branches: 55, functions: 75, statements: 71 }, durationMs: 50 }),
+      } as never),
+      getForFile: () => null,
+    } as never;
+    const state = {
+      ...stateWithDiff(),
+      baselineTestResult: { coverageReport: { lines: 85, branches: 70, functions: 85, statements: 86 } },
+    };
+    const result = await verifierTestsStage(state as never, deps);
+    expect(result.verifierVerdict?.testResult).toBe('FAIL');
+    expect(result.verifierVerdict?.diagnostic).toBe('FIX_TEST');
+    expect(result.verifierVerdict?.testFailures.some(f => f.testName === 'coverage')).toBe(true);
+    // Coverage regression should be recorded in audit trail
+    expect(result.workflowAuditTrail.some(e => e.node === 'verifier_tests' && e.decision === 'FAIL_COVERAGE')).toBe(true);
+  });
+
+  it('returns FAIL when no baseline and coverage below minimum threshold', async () => {
+    const deps = makeStubDeps();
+    const orig = deps.pluginRegistry.get('typescript');
+    deps.pluginRegistry = {
+      get: () => ({
+        ...orig,
+        runProtectionTests: async () => ({ passed: true, totalTests: 3, failedTests: 0, failures: [], coverageReport: { lines: 50, branches: 40, functions: 55, statements: 52 }, durationMs: 50 }),
+        runAcceptanceTests: async () => ({ passed: true, totalTests: 1, failedTests: 0, failures: [], coverageReport: null, durationMs: 50 }),
+      } as never),
+      getForFile: () => null,
+    } as never;
+    const state = { ...stateWithDiff(), baselineTestResult: null };
+    const result = await verifierTestsStage(state as never, deps);
+    expect(result.verifierVerdict?.testResult).toBe('FAIL');
+    expect(result.verifierVerdict?.diagnostic).toBe('FIX_TEST');
+    expect(result.verifierVerdict?.testFailures.some(f => f.testName === 'coverage')).toBe(true);
+    expect(result.workflowAuditTrail.some(e => e.node === 'verifier_tests' && e.decision === 'FAIL_COVERAGE')).toBe(true);
+  });
 });
 
 describe('verifierApiStage', () => {
