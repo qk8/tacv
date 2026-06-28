@@ -74,7 +74,7 @@ export async function actorImpl(state: WorkflowState, deps: ActivityDeps): Promi
     cumulativeCostUsd: newCost,
     confidenceScore:   newConf,
     sessionScratchpad: accumulatedScratchpad,
-  }, { node: 'actor', decision: 'diff_generated', keyValues: { attempt: attempt + 1, files: diffProposal?.diffs.length ?? 0, costUsd: newCost.toFixed(4) } });
+  }, { node: 'actor', decision: 'diff_generated', keyValues: { attempt: attempt + 1, files: diffProposal?.diffs.length ?? 0, costUsd: newCost.toFixed(4), promptVersion: ACTOR_PROMPT_VERSION } });
 }
 
 function buildActorSystem(state: WorkflowState, deps: ActivityDeps): string {
