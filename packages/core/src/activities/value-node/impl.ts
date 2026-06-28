@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowState, StrategyCandidate } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 
@@ -33,15 +34,10 @@ export async function valueNodeImpl(state: WorkflowState, deps: ActivityDeps): P
 
   log.info('value_node.complete', { selected: output.selectedStrategy.strategyId });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:    'TDD_GATE',
     selectedStrategy: output.selectedStrategy as StrategyCandidate,
     prunedStrategies: output.prunedStrategies as StrategyCandidate[],
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'value_node',
-      decision: `selected_${output.selectedStrategy.strategyId}`,
-      keyValues: { rationale: output.rationale, risk: output.selectedStrategy.estimatedRisk },
-    }],
-  };
+  }, { node: 'value_node', decision: `selected_${output.selectedStrategy.strategyId}`, keyValues: { rationale: output.rationale, risk: output.selectedStrategy.estimatedRisk } });
 }

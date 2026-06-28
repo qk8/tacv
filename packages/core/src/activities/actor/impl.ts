@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowState } from '../../state/schemas.js';
-import { DiffProposal } from '../../state/schemas.js';
+import { DiffProposal, withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { computeConfidenceScore } from '../../state/transitions.js';
 import { createLogger } from '../../observability/logger.js';
@@ -64,7 +64,7 @@ export async function actorImpl(state: WorkflowState, deps: ActivityDeps): Promi
     diffFiles: diffProposal?.diffs.length ?? 0, promptVersion: ACTOR_PROMPT_VERSION,
   });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:      'PREFLIGHT',
     diffProposal,
@@ -72,12 +72,7 @@ export async function actorImpl(state: WorkflowState, deps: ActivityDeps): Promi
     cumulativeCostUsd: newCost,
     confidenceScore:   newConf,
     sessionScratchpad: accumulatedScratchpad,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'actor',
-      decision: 'diff_generated',
-      keyValues: { attempt: attempt + 1, files: diffProposal?.diffs.length ?? 0, costUsd: newCost.toFixed(4) },
-    }],
-  };
+  }, { node: 'actor', decision: 'diff_generated', keyValues: { attempt: attempt + 1, files: diffProposal?.diffs.length ?? 0, costUsd: newCost.toFixed(4) } });
 }
 
 function buildActorSystem(state: WorkflowState, deps: ActivityDeps): string {

@@ -1,5 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
-import { TestFaultAssessment } from '../../state/schemas.js';
+import { TestFaultAssessment, withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { isTestFile } from '../critics/shared.js';
 import { createLogger } from '../../observability/logger.js';
@@ -68,7 +68,7 @@ testing wrong method, too-strict assertions on dynamic values.`,
 
   if (assessment.verdict === 'TEST_FAULT' && assessment.confidence >= 0.7) {
     log.warn('test_validity.test_fault_detected', { tests: assessment.affectedTests, confidence: assessment.confidence });
-    return {
+    return withAuditEntry({
       ...state,
       currentPhase: 'HITL_ESCALATION',
       testValidityFlag: {
@@ -78,12 +78,7 @@ testing wrong method, too-strict assertions on dynamic values.`,
         confidence: assessment.confidence,
         detectedAtCycle: state.correctionCycle.attemptCount,
       },
-      workflowAuditTrail: [...state.workflowAuditTrail, {
-        timestampMs: Date.now(), node: 'test_validity_review',
-        decision: 'test_fault_escalation',
-        keyValues: { verdict: assessment.verdict, confidence: assessment.confidence, tests: assessment.affectedTests },
-      }],
-    };
+    }, { node: 'test_validity_review', decision: 'test_fault_escalation', keyValues: { verdict: assessment.verdict, confidence: assessment.confidence, tests: assessment.affectedTests } });
   }
 
   // IMPLEMENTATION_FAULT or AMBIGUOUS → resume normal correction

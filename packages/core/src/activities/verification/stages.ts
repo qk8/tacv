@@ -1,4 +1,5 @@
 import type { WorkflowState, TestFailure } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import { checkCoverageRegression } from './coverageCheck.js';
@@ -97,14 +98,10 @@ export async function verifierTypeCheckStage(
         message:  `[typecheck] ${v.file}:${v.line ?? '?'} — ${v.message}`,
       }));
       log.warn('verifier.typecheck.fail', { violations: tcResult.violations.length });
-      return {
+      return withAuditEntry({
         ...state,
         verifierVerdict: failVerdict(failures, 'AMBIGUOUS', state),
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'verifier_typecheck',
-          decision: 'FAIL', keyValues: { violations: tcResult.violations.length },
-        }],
-      };
+      }, { node: 'verifier_typecheck', decision: 'FAIL', keyValues: { violations: tcResult.violations.length } });
     }
   } catch (err) {
     log.warn('verifier.typecheck.error', { error: String(err) });
@@ -113,14 +110,10 @@ export async function verifierTypeCheckStage(
   }
 
   log.info('verifier.typecheck.pass');
-  return {
+  return withAuditEntry({
     ...state,
     verifierVerdict: passVerdict(state),
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'verifier_typecheck',
-      decision: 'PASS', keyValues: {},
-    }],
-  };
+  }, { node: 'verifier_typecheck', decision: 'PASS', keyValues: {} });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,14 +159,10 @@ export async function verifierTestsStage(
         message:  `[protection] ${f.message}`,
       }));
       log.warn('verifier.tests.protection_fail', { count: protResult.failedTests });
-      return {
+      return withAuditEntry({
         ...state,
         verifierVerdict: failVerdict(failures, 'FIX_IMPL', state),
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'verifier_tests',
-          decision: 'FAIL_PROTECTION', keyValues: { count: protResult.failedTests },
-        }],
-      };
+      }, { node: 'verifier_tests', decision: 'FAIL_PROTECTION', keyValues: { count: protResult.failedTests } });
     }
 
     // ── Acceptance tests ────────────────────────────────────────────────────
@@ -188,14 +177,10 @@ export async function verifierTestsStage(
         message:  `[acceptance] ${f.message}`,
       }));
       log.warn('verifier.tests.acceptance_fail', { count: accResult.failedTests });
-      return {
+      return withAuditEntry({
         ...state,
         verifierVerdict: failVerdict(failures, 'FIX_TEST', state),
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'verifier_tests',
-          decision: 'FAIL_ACCEPTANCE', keyValues: { count: accResult.failedTests },
-        }],
-      };
+      }, { node: 'verifier_tests', decision: 'FAIL_ACCEPTANCE', keyValues: { count: accResult.failedTests } });
     }
 
     // ── Coverage check (non-blocking warning only) ──────────────────────────
@@ -242,14 +227,10 @@ export async function verifierTestsStage(
   }
 
   log.info('verifier.tests.pass');
-  return {
+  return withAuditEntry({
     ...state,
     verifierVerdict: passVerdict(state),
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'verifier_tests',
-      decision: 'PASS', keyValues: {},
-    }],
-  };
+  }, { node: 'verifier_tests', decision: 'PASS', keyValues: {} });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -302,15 +283,11 @@ export async function verifierApiStage(
         message:  `[api] ${f.message}`,
       }));
       log.warn('verifier.api.fail', { count: mappedApiResult.failedTests });
-      return {
+      return withAuditEntry({
         ...state,
         apiTestResult:  mappedApiResult,
         verifierVerdict: failVerdict(failures, 'FIX_IMPL', state),
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'verifier_api',
-          decision: 'FAIL', keyValues: { count: mappedApiResult.failedTests },
-        }],
-      };
+      }, { node: 'verifier_api', decision: 'FAIL', keyValues: { count: mappedApiResult.failedTests } });
     }
     log.info('verifier.api.pass');
     return {
@@ -365,7 +342,7 @@ export async function verifierMutationStage(
     const threshold = resolveThreshold(changedFiles, deps);
     if (mutResult.mutationScore < threshold) {
       log.warn('verifier.mutation.fail', { score: mutResult.mutationScore, threshold });
-      return {
+      return withAuditEntry({
         ...state,
         mutationResult:  mutResult,
         verifierVerdict: failVerdict(
@@ -373,11 +350,7 @@ export async function verifierMutationStage(
           'FIX_TEST',
           state,
         ),
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'verifier_mutation',
-          decision: 'FAIL', keyValues: { score: mutResult.mutationScore, threshold },
-        }],
-      };
+      }, { node: 'verifier_mutation', decision: 'FAIL', keyValues: { score: mutResult.mutationScore, threshold } });
     }
     log.info('verifier.mutation.pass', { score: mutResult.mutationScore });
     return { ...state, mutationResult: mutResult, verifierVerdict: passVerdict(state) };
@@ -442,15 +415,11 @@ export async function verifierVisualStage(
         message:  `Visual diff ${d.pixelDiffPct.toFixed(2)}% exceeds ${maxDiff}%`,
       }));
       log.warn('verifier.visual.fail', { count: failures.length });
-      return {
+      return withAuditEntry({
         ...state,
         visualTestResult: visualResult,
         verifierVerdict:  failVerdict(failures, 'FIX_IMPL', state),
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'verifier_visual',
-          decision: 'FAIL', keyValues: { diffs: failures.length },
-        }],
-      };
+      }, { node: 'verifier_visual', decision: 'FAIL', keyValues: { diffs: failures.length } });
     }
 
     log.info('verifier.visual.pass');

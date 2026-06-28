@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowState, DiffProposal } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import * as fs from 'node:fs/promises';
@@ -120,16 +121,11 @@ export async function tddGateImpl(state: WorkflowState, deps: ActivityDeps): Pro
 
   log.info('tdd_gate.red_phase_confirmed', { failingCount: redResult.failedTests, total: testFilePaths.length });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase: 'SANDBOX_VALIDATION',
     diffProposal: appendScaffoldsToDiff(state.diffProposal, scaffolds),
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'tdd_gate',
-      decision: 'test_skeletons_generated_red_confirmed',
-      keyValues: { count: scaffolds.length, failing: redResult.failedTests },
-    }],
-  };
+  }, { node: 'tdd_gate', decision: 'test_skeletons_generated_red_confirmed', keyValues: { count: scaffolds.length, failing: redResult.failedTests } });
 }
 
 function extractSourceFiles(skeleton: unknown, languageId: string): string[] {

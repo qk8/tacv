@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowState, ImplementationPlan, CriticFinding } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import { styleCritic }       from '../critics/styleCritic.js';
@@ -54,16 +55,11 @@ export async function implementationPlanImpl(
     });
   } catch (err) {
     log.warn('planning.extractor_failed', { error: String(err) });
-    return {
+    return withAuditEntry({
       ...state,
       currentPhase:       'TDD_GATE',
       implementationPlan: null,
-      workflowAuditTrail: [...state.workflowAuditTrail, {
-        timestampMs: Date.now(), node: 'implementation_plan',
-        decision: 'plan_skipped_extractor_error',
-        keyValues: { error: String(err) },
-      }],
-    };
+    }, { node: 'implementation_plan', decision: 'plan_skipped_extractor_error', keyValues: { error: String(err) } });
   }
 
   // Run fast critics on the plan if a diffProposal exists
@@ -95,21 +91,11 @@ export async function implementationPlanImpl(
     criticsWarnings: fastCriticFindings.length,
   });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:       'TDD_GATE',
     implementationPlan: plan,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'implementation_plan',
-      decision:   'plan_created',
-      keyValues:  {
-        files:       rawPlan.filesToCreate.length + rawPlan.filesToModify.length,
-        complexity:  rawPlan.estimatedComplexity,
-        riskyAreas:  rawPlan.riskyAreas.length,
-        approved:    criticsApproved,
-      },
-    }],
-  };
+  }, { node: 'implementation_plan', decision: 'plan_created', keyValues: { files: rawPlan.filesToCreate.length + rawPlan.filesToModify.length, complexity: rawPlan.estimatedComplexity, riskyAreas: rawPlan.riskyAreas.length, approved: criticsApproved } });
 }
 
 function buildPlanPrompt(state: WorkflowState): string {

@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import type { EscalationReason } from '../../state/transitions.js';
 import { createLogger } from '../../observability/logger.js';
@@ -90,15 +91,10 @@ export async function hitlImpl(state: WorkflowState, reason: EscalationReason, d
     hasTestFault: Boolean(testFaultInfo), hasFlakiness: Boolean(flakinessInfo),
   });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase: 'HITL_ESCALATION',
     escalationPayload: payload,
     hitlBudgetAtEscalation: budgetAtEscalation,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'hitl_escalation',
-      decision: `escalating_${reason}`,
-      keyValues: { escId, reason, costUsd: budgetAtEscalation, budgetRemaining },
-    }],
-  };
+  }, { node: 'hitl_escalation', decision: `escalating_${reason}`, keyValues: { escId, reason, costUsd: budgetAtEscalation, budgetRemaining } });
 }

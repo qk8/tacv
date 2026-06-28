@@ -1,4 +1,5 @@
 import type { WorkflowState, GitCheckpoint } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import { execFile } from 'node:child_process';
@@ -65,15 +66,10 @@ export async function gitCheckpointImpl(
     cycleNumber,
   };
 
-  return {
+  return withAuditEntry({
     ...state,
     gitCheckpoint: checkpoint,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'git_checkpoint',
-      decision:   commitHash ? 'committed' : 'skipped_git_error',
-      keyValues:  { commitHash, branch, files: changedFiles.length },
-    }],
-  };
+  }, { node: 'git_checkpoint', decision: commitHash ? 'committed' : 'skipped_git_error', keyValues: { commitHash, branch, files: changedFiles.length } });
 }
 
 async function runGitArgs(args: string[], cwd: string): Promise<string> {

@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 
@@ -40,16 +41,11 @@ export async function flakinessCheckImpl(state: WorkflowState, deps: ActivityDep
   }
 
   if (flakyTests.length > 0) {
-    return {
+    return withAuditEntry({
       ...state,
       currentPhase: 'TEST_VALIDITY_REVIEW',
       flakinessReport: { flakyTests, detectedAt: state.correctionCycle.attemptCount },
-      workflowAuditTrail: [...state.workflowAuditTrail, {
-        timestampMs: Date.now(), node: 'flakiness_check',
-        decision: 'flaky_tests_detected',
-        keyValues: { count: flakyTests.length, files: flakyTests.map(f => f.testFile) },
-      }],
-    };
+    }, { node: 'flakiness_check', decision: 'flaky_tests_detected', keyValues: { count: flakyTests.length, files: flakyTests.map(f => f.testFile) } });
   }
 
   log.info('flakiness.no_flakiness_detected');

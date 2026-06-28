@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import { FeasibilityAssessment } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
@@ -41,7 +42,7 @@ Set shouldEscalateEarly=true if ambiguity>=4 OR (complexity>=4 AND risk>=4).`,
 
   if (assessment.shouldEscalateEarly) {
     log.warn('feasibility.early_escalation', { reason: assessment.escalationReason, ambiguities: assessment.ambiguities });
-    return {
+    return withAuditEntry({
       ...state,
       feasibility: assessment,
       currentPhase: 'HITL_ESCALATION',
@@ -52,12 +53,7 @@ Set shouldEscalateEarly=true if ambiguity>=4 OR (complexity>=4 AND risk>=4).`,
         hint: 'Clarify the ambiguities above and resume with --action override --guidance "..."',
         estimatedCostIfProceeded: `$${(deps.config.tokenBudget.criticalDollar * 0.6).toFixed(0)}–$${deps.config.tokenBudget.criticalDollar.toFixed(0)}`,
       },
-      workflowAuditTrail: [...state.workflowAuditTrail, {
-        timestampMs: Date.now(), node: 'feasibility_check',
-        decision: 'early_hitl_escalation',
-        keyValues: { ambiguity: assessment.ambiguity, ambiguities: assessment.ambiguities },
-      }],
-    };
+    }, { node: 'feasibility_check', decision: 'early_hitl_escalation', keyValues: { ambiguity: assessment.ambiguity, ambiguities: assessment.ambiguities } });
   }
 
   return { ...state, feasibility: assessment, currentPhase: 'VALUE_NODE' };

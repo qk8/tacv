@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowState, CriticFinding } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import type { WorkflowConfig } from '../../config/index.js';
 import { createLogger } from '../../observability/logger.js';
@@ -202,7 +203,7 @@ export async function allCriticsImpl(
     lane,
   });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:   'VERIFIER',
     criticFindings: allFindings,
@@ -215,10 +216,5 @@ export async function allCriticsImpl(
       blockedByCritic: true,
       confidenceScore: state.confidenceScore,
     } : state.verifierVerdict,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'critics',
-      decision:   blockedByCritic ? 'blocked_by_critic' : 'critics_passed',
-      keyValues:  { total: allFindings.length, critical: allFindings.filter(f => f.severity === 'critical').length, lane },
-    }],
-  };
+  }, { node: 'critics', decision: blockedByCritic ? 'blocked_by_critic' : 'critics_passed', keyValues: { total: allFindings.length, critical: allFindings.filter(f => f.severity === 'critical').length, lane } });
 }

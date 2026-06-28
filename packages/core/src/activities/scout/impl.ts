@@ -1,4 +1,5 @@
 import type { WorkflowState, StrategyCandidate } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import { z } from 'zod';
@@ -71,18 +72,14 @@ export async function scoutImpl(state: WorkflowState, deps: ActivityDeps): Promi
 
   log.info('scout.complete', { strategies: candidates.length, taskId: state.taskId });
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:       'VALUE_NODE',
     contextSkeleton:    output.contextSkeleton,
     blastRadiusMap,
     gitBlameContext:    output.gitBlameContext,
     strategyCandidates: candidates,
-    workflowAuditTrail: [
-      ...state.workflowAuditTrail,
-      { timestampMs: Date.now(), node: 'scout', decision: 'context_built', keyValues: { strategies: candidates.length } },
-    ],
-  };
+  }, { node: 'scout', decision: 'context_built', keyValues: { strategies: candidates.length } });
 }
 
 function buildScoutPrompt(state: WorkflowState, libraryDocs: string, memory: string): string {

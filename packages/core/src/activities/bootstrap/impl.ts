@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import * as fs from 'node:fs/promises';
@@ -31,13 +32,9 @@ export async function bootstrapImpl(state: WorkflowState, deps: ActivityDeps): P
     log.warn('bootstrap.memory_add_failed', { error: String(err) });
   }
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase: 'SCOUT',
     agentsMdContext,
-    workflowAuditTrail: [
-      ...state.workflowAuditTrail,
-      { timestampMs: Date.now(), node: 'bootstrap', decision: 'session_started', keyValues: { taskId: state.taskId, mode: state.task.mode } },
-    ],
-  };
+  }, { node: 'bootstrap', decision: 'session_started', keyValues: { taskId: state.taskId, mode: state.task.mode } });
 }

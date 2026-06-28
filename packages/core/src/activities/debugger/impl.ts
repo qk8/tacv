@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 
@@ -43,16 +44,11 @@ export async function debuggerImpl(state: WorkflowState, deps: ActivityDeps): Pr
     const observations = await debugger_.debug(state);
     log.info('debugger_activity.complete', { errorType: observations.errorType, hits: observations.breakpointHits.length });
 
-    return {
+    return withAuditEntry({
       ...state,
       currentPhase:      'ACTOR',
       debugObservations: observations,
-      workflowAuditTrail: [...state.workflowAuditTrail, {
-        timestampMs: Date.now(), node: 'intelligent_debugger',
-        decision:    `debug_complete_${observations.errorType}`,
-        keyValues:   { errorType: observations.errorType, frames: observations.prunedStack.length, hits: observations.breakpointHits.length },
-      }],
-    };
+    }, { node: 'intelligent_debugger', decision: `debug_complete_${observations.errorType}`, keyValues: { errorType: observations.errorType, frames: observations.prunedStack.length, hits: observations.breakpointHits.length } });
   } catch (err) {
     log.error('debugger_activity.failed', { error: String(err) });
     // Fallback: text-only analysis without live debugging
@@ -84,7 +80,7 @@ async function _fallbackTextAnalysis(
   const plugin    = deps.pluginRegistry.get(langId);
   const errorType = classifyErrorWithPlugin(rawOutput, plugin);
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase: 'ACTOR',
     debugObservations: {
@@ -97,9 +93,5 @@ async function _fallbackTextAnalysis(
       playwrightTracePath: null,
       prunedStack:         [],
     },
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'intelligent_debugger',
-      decision: 'fallback_text_analysis', keyValues: { rootCauseLen: rootCause.length },
-    }],
-  };
+  }, { node: 'intelligent_debugger', decision: 'fallback_text_analysis', keyValues: { rootCauseLen: rootCause.length } });
 }

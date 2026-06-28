@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import { LessonLearned } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
@@ -110,14 +111,9 @@ export async function memoryConsolidationImpl(state: WorkflowState, deps: Activi
     await updateSelfHealingRules(state, deps);
   } catch (err) { log.warn('memory_consolidation.self_healing_failed', { error: String(err) }); }
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:  'COMPLETE',
     lessonLearned: lesson,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'memory_consolidation',
-      decision:    'lesson_compiled',
-      keyValues:   { succeededVia: lesson.succeededVia, costUsd: lesson.totalCostUsd, qualityFlagged: qualityIssues.length > 0 },
-    }],
-  };
+  }, { node: 'memory_consolidation', decision: 'lesson_compiled', keyValues: { succeededVia: lesson.succeededVia, costUsd: lesson.totalCostUsd, qualityFlagged: qualityIssues.length > 0 } });
 }

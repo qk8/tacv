@@ -1,4 +1,5 @@
 import type { WorkflowState, BaselineTestResult } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 
@@ -37,15 +38,10 @@ export async function baselineVerificationImpl(
   } catch (err) {
     log.warn('baseline.test_run_failed', { error: String(err) });
     // If we can't run tests at all, skip gracefully — don't block the workflow
-    return {
+    return withAuditEntry({
       ...state,
       currentPhase: 'VALUE_NODE',
-      workflowAuditTrail: [...state.workflowAuditTrail, {
-        timestampMs: Date.now(), node: 'baseline_verification',
-        decision: 'skipped_test_run_error',
-        keyValues: { error: String(err) },
-      }],
-    };
+    }, { node: 'baseline_verification', decision: 'skipped_test_run_error', keyValues: { error: String(err) } });
   }
 
   const baseline: BaselineTestResult = {
@@ -75,14 +71,9 @@ export async function baselineVerificationImpl(
     });
   }
 
-  return {
+  return withAuditEntry({
     ...state,
     currentPhase:       nextPhase,
     baselineTestResult: baseline,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'baseline_verification',
-      decision:   shouldEscalate ? 'baseline_failed_escalating' : 'baseline_passed',
-      keyValues:  { passed: baseline.passed, failures: baseline.failureCount },
-    }],
-  };
+  }, { node: 'baseline_verification', decision: shouldEscalate ? 'baseline_failed_escalating' : 'baseline_passed', keyValues: { passed: baseline.passed, failures: baseline.failureCount } });
 }

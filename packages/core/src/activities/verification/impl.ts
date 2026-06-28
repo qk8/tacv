@@ -1,4 +1,5 @@
 import type { WorkflowState, TestFailure, AstDiffResult } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { computeConfidenceScore } from '../../state/transitions.js';
 import { isFrontendModule, isBackendModule } from '../critics/shared.js';
@@ -133,17 +134,12 @@ function getMutationScoreThreshold(deps: ActivityDeps, testFile: string): number
 function buildFail(state: WorkflowState, deps: ActivityDeps, reason: string, failures: TestFailure[], astDiff: AstDiffResult | null, diagnostic: 'FIX_IMPL'|'FIX_TEST'|'AMBIGUOUS'): WorkflowState {
   const newConf = Math.max(0, state.confidenceScore - 0.12);
   log.warn('verifier.fail', { reason, failures: failures.length });
-  return {
+  return withAuditEntry({
     ...state,
     confidenceScore: newConf,
     verifierVerdict: { testResult: 'FAIL', diagnostic, testFailures: failures.slice(0, 10), blockedByCritic: false, confidenceScore: newConf },
     astDiff,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'verifier',
-      decision: `fail_${reason.toLowerCase()}`,
-      keyValues: { reason, failures: failures.length },
-    }],
-  };
+  }, { node: 'verifier', decision: `fail_${reason.toLowerCase()}`, keyValues: { reason, failures: failures.length } });
 }
 
 function buildPass(state: WorkflowState, _deps: ActivityDeps, astDiff: AstDiffResult | null,
@@ -151,15 +147,11 @@ function buildPass(state: WorkflowState, _deps: ActivityDeps, astDiff: AstDiffRe
   apiTestResult:  import('../../state/schemas.js').ApiTestResult | null,
   visualResult:   import('../../state/schemas.js').VisualTestResult | null): WorkflowState {
   log.info('verifier.pass', { attempt: state.correctionCycle.attemptCount });
-  return {
+  return withAuditEntry({
     ...state,
     verifierVerdict: { testResult: 'PASS', diagnostic: 'PASS', testFailures: [], blockedByCritic: false, confidenceScore: 1.0 },
     astDiff, mutationResult, apiTestResult, visualTestResult: visualResult,
-    workflowAuditTrail: [...state.workflowAuditTrail, {
-      timestampMs: Date.now(), node: 'verifier', decision: 'PASS',
-      keyValues: { attempt: state.correctionCycle.attemptCount },
-    }],
-  };
+  }, { node: 'verifier', decision: 'PASS', keyValues: { attempt: state.correctionCycle.attemptCount } });
 }
 
 async function discoverAllTests(repoPath: string, langId: string): Promise<string[]> {

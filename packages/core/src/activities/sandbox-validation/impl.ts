@@ -1,4 +1,5 @@
 import type { WorkflowState } from '../../state/schemas.js';
+import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 
@@ -52,14 +53,9 @@ export async function sandboxValidationImpl(state: WorkflowState, deps: Activity
     if (issues.length > 0) {
       log.warn('sandbox_validation.env_drift', { issues });
       // Log prominently but continue — drift is a warning, not a blocker
-      return {
+      return withAuditEntry({
         ...state, sandboxEnvOk: false, currentPhase: 'ACTOR',
-        workflowAuditTrail: [...state.workflowAuditTrail, {
-          timestampMs: Date.now(), node: 'sandbox_validation',
-          decision: 'env_drift_detected',
-          keyValues: { issues, hint: 'Results in sandbox may differ from production.' },
-        }],
-      };
+      }, { node: 'sandbox_validation', decision: 'env_drift_detected', keyValues: { issues, hint: 'Results in sandbox may differ from production.' } });
     }
 
     log.info('sandbox_validation.ok');
