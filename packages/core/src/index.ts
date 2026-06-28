@@ -6,5 +6,5 @@ export type { WorkflowConfig, TokenBudgetConfig, CoverageConfig, MutationConfig,
 export { createLogger, log, rootLogger } from './observability/logger.js';
 export { initOtel }                      from './observability/otel.js';
 export { BudgetAwareAgent, BudgetExceededError } from './activities/infrastructure/BudgetAwareAgent.js';
-export { ObservabilityInterceptor }      from './observability/ActivityInstrumentation.js';
+export { ObservabilityInterceptor }      from './observability/interceptors.js';
 export * from './workflows/index.js';
