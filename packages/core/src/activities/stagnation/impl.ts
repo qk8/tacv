@@ -106,15 +106,17 @@ export function detectStagnationPattern(
 }
 
 export function updateCorrectionCycle(
-  cycle:   CorrectionCycle,
-  newHash: string,
-  pattern: StagnationPattern,
+  cycle:         CorrectionCycle,
+  newHash:       string,
+  pattern:       StagnationPattern,
+  rawMessages?:  string[],
 ): CorrectionCycle {
   return {
     ...cycle,
     lastErrorHash:        newHash,
     stagnationPattern:    pattern,
     errorHistory:         [...cycle.errorHistory, newHash].slice(-10),
+    rawErrorHistory:      [...(cycle.rawErrorHistory ?? []), ...(rawMessages ?? [])].slice(-10),
     lastOutcomeSignature: newHash,
   };
 }
@@ -138,7 +140,7 @@ export function checkStagnationImpl(
   const historyTexts = extractHistoryTexts(state);
 
   const pattern  = detectStagnationPattern(state.correctionCycle, newHash, threshold, errorTexts, historyTexts);
-  const newCycle = updateCorrectionCycle(state.correctionCycle, newHash, pattern);
+  const newCycle = updateCorrectionCycle(state.correctionCycle, newHash, pattern, errorTexts);
   return { pattern, newCycle };
 }
 

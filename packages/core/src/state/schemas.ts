@@ -31,6 +31,7 @@ export type TaskSpec = z.infer<typeof TaskSpec>;
 export const CorrectionCycle = z.object({
   attemptCount: z.number().int().min(0), branchName: z.string().nullable(),
   lastErrorHash: z.string().nullable(), errorHistory: z.array(z.string()),
+  rawErrorHistory: z.array(z.string()),
   stagnationPattern: z.enum(['none','iteration','semantic','outcome']),
   lastOutcomeSignature: z.string().nullable(),
 });
@@ -311,7 +312,7 @@ export function createInitialState(task: TaskSpec, sessionId?: string): Workflow
     criticFindings: [], criticErrors: [],
     debugObservations: null, visualTestResult: null,
     mutationResult: null, apiTestResult: null, astDiff: null, selectedTestFiles: [],
-    correctionCycle: { attemptCount: 0, branchName: null, lastErrorHash: null, errorHistory: [], stagnationPattern: 'none', lastOutcomeSignature: null },
+    correctionCycle: { attemptCount: 0, branchName: null, lastErrorHash: null, errorHistory: [], rawErrorHistory: [], stagnationPattern: 'none', lastOutcomeSignature: null },
     confidenceScore: 1.0, cumulativeCostUsd: 0.0,
     lessonLearned: null, escalationPayload: null, workflowAuditTrail: [],
     baselineTestResult: null, implementationPlan: null,

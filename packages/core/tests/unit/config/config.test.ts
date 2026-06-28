@@ -68,3 +68,44 @@ describe('skipTddGate config', () => {
     expect(() => WorkflowConfig.parse({ skipTddGate: 'yes' })).toThrow();
   });
 });
+
+describe('languageConfig', () => {
+  it('defaults to empty object', () => {
+    const cfg = WorkflowConfig.parse({});
+    expect(cfg.languageConfig).toBeDefined();
+    expect(cfg.languageConfig.typescript).toBeUndefined();
+    expect(cfg.languageConfig.java).toBeUndefined();
+  });
+
+  it('accepts Java language-specific config', () => {
+    const cfg = WorkflowConfig.parse({
+      languageConfig: {
+        java: { userPackage: 'com.acme.myapp', debugPort: 5005, actuatorBaseUrl: 'http://localhost:8080/actuator' },
+      },
+    });
+    expect(cfg.languageConfig.java?.userPackage).toBe('com.acme.myapp');
+    expect(cfg.languageConfig.java?.debugPort).toBe(5005);
+    expect(cfg.languageConfig.java?.actuatorBaseUrl).toBe('http://localhost:8080/actuator');
+  });
+
+  it('accepts TypeScript language-specific config', () => {
+    const cfg = WorkflowConfig.parse({
+      languageConfig: {
+        typescript: { userSrcRoot: 'src', debugPort: 9229 },
+      },
+    });
+    expect(cfg.languageConfig.typescript?.userSrcRoot).toBe('src');
+    expect(cfg.languageConfig.typescript?.debugPort).toBe(9229);
+  });
+
+  it('accepts both languages simultaneously', () => {
+    const cfg = WorkflowConfig.parse({
+      languageConfig: {
+        typescript: { userSrcRoot: 'app', debugPort: 9230 },
+        java: { userPackage: 'org.example', debugPort: 5006, actuatorBaseUrl: 'http://localhost:9090/actuator' },
+      },
+    });
+    expect(cfg.languageConfig.typescript?.userSrcRoot).toBe('app');
+    expect(cfg.languageConfig.java?.userPackage).toBe('org.example');
+  });
+});

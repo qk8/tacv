@@ -145,6 +145,25 @@ export const CriticLanesConfig = z.object({
   alwaysRunSemantic:       z.boolean().default(false),
   semanticLaneDeferCycles: z.number().int().min(0).default(1),
 });
+
+// ── Language-specific config ──────────────────────────────────────────────────
+
+export const TypeScriptLanguageConfig = z.object({
+  userSrcRoot: z.string().default('src'),
+  debugPort:   z.number().int().default(9229),
+});
+
+export const JavaLanguageConfig = z.object({
+  userPackage:     z.string().default('com.example'),
+  debugPort:       z.number().int().default(5005),
+  actuatorBaseUrl: z.string().default('http://localhost:8080/actuator'),
+});
+
+export const LanguageConfig = z.object({
+  typescript: TypeScriptLanguageConfig.optional(),
+  java:       JavaLanguageConfig.optional(),
+}).default({});
+
 export const WorkflowConfig = z.object({
   // Temporal
   temporalAddress:   z.string().default('localhost:7233'),
@@ -190,6 +209,9 @@ export const WorkflowConfig = z.object({
   gitCheckpoint: GitCheckpointConfig.default({}),
   criticLanes:  CriticLanesConfig.default({}),
   skipTddGate:  z.boolean().default(false),
+
+  // Language-specific config
+  languageConfig: LanguageConfig,
 });
 export type WorkflowConfig = z.infer<typeof WorkflowConfig>;
 

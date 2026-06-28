@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createInitialState, withPhase, withCost } from '../../src/state/schemas.js';
 import { computeVerifierTransition } from '../../src/state/transitions.js';
 import { loadConfig } from '../../src/config/index.js';
+import type { WorkflowState, StrategyCandidate } from '../../src/state/schemas.js';
+import { _diversifyStrategyCandidates } from '../../src/workflows/CodingWorkflow.js';
 
 /**
  * Workflow orchestration logic tests.
@@ -90,5 +92,65 @@ describe('CodingWorkflow orchestration logic', () => {
     expect(s1.currentPhase).toBe('BOOTSTRAP');
     expect(s2.currentPhase).toBe('ACTOR');
     expect(s1).not.toBe(s2);
+  });
+});
+
+describe('_diversifyStrategyCandidates', () => {
+  function makeCandidate(id: string, desc: string): StrategyCandidate {
+    return { strategyId: id, description: desc, compositeScore: 0.5, estimatedRisk: 'low' as const, affectedFiles: [] };
+  }
+
+  function makeStateWithCandidates(activeIds: string[], exhaustedIds: string[]): WorkflowState {
+    const allCandidates: StrategyCandidate[] = [
+      ...activeIds.map((id, i) => makeCandidate(id, `active strategy ${i}`)),
+      ...exhaustedIds.map((id, i) => makeCandidate(id, `exhausted strategy ${i}`)),
+    ];
+    return {
+      ...createInitialState(task),
+      strategyCandidates: allCandidates,
+      exhaustedBranches: exhaustedIds,
+    };
+  }
+
+  it('preserves exhausted candidates when diversifying active ones', () => {
+    const state = makeStateWithCandidates(['a', 'b', 'c'], ['x', 'y']);
+    const result = _diversifyStrategyCandidates(state);
+
+    // All 5 original candidates must remain — exhausted ones must not be dropped
+    expect(result.strategyCandidates.length).toBe(5);
+    expect(result.strategyCandidates.map(c => c.strategyId).sort()).toEqual(['a', 'b', 'c', 'x', 'y'].sort());
+  });
+
+  it('adds avoidHint only to active candidates, not exhausted ones', () => {
+    const state = makeStateWithCandidates(['a', 'b'], ['x']);
+    const result = _diversifyStrategyCandidates(state);
+
+    const active = result.strategyCandidates.filter(c => !state.exhaustedBranches.includes(c.strategyId));
+    const exhausted = result.strategyCandidates.filter(c => state.exhaustedBranches.includes(c.strategyId));
+
+    active.forEach(c => {
+      expect(c.avoidHint).toBeDefined();
+      expect(c.avoidHint).toContain('Do NOT use these approaches');
+    });
+    exhausted.forEach(c => {
+      expect(c.avoidHint).toBeUndefined();
+    });
+  });
+
+  it('returns state unchanged when fewer than 2 active candidates', () => {
+    const state = makeStateWithCandidates(['a'], ['x', 'y']);
+    const result = _diversifyStrategyCandidates(state);
+    expect(result.strategyCandidates.length).toBe(3);
+    expect(result.strategyCandidates.map(c => c.strategyId).sort()).toEqual(['a', 'x', 'y'].sort());
+  });
+
+  it('returns state unchanged when no exhausted candidates (all active)', () => {
+    const state = makeStateWithCandidates(['a', 'b'], []);
+    const result = _diversifyStrategyCandidates(state);
+    expect(result.strategyCandidates.length).toBe(2);
+    // All should have avoidHint since they are all active
+    result.strategyCandidates.forEach(c => {
+      expect(c.avoidHint).toBeDefined();
+    });
   });
 });

@@ -18,8 +18,11 @@ const ReplanOutput = z.object({
 export async function replanImpl(state: WorkflowState, deps: ActivityDeps): Promise<WorkflowState> {
   log.info('replan.start', { attempt: state.correctionCycle.attemptCount });
 
+  const recentErrors = state.correctionCycle.rawErrorHistory?.slice(-3).join('\n---\n')
+    ?? '(no error detail available)';
+
   const output = await deps.extractor.extract(
-    `The current implementation strategy has failed ${state.correctionCycle.attemptCount} times.\nTask: ${state.task.description}\n\nPrevious strategies tried:\n${JSON.stringify(state.prunedStrategies)}\n\nErrors encountered:\n${state.correctionCycle.errorHistory.slice(-3).join('\n')}\n\nGenerate 2 fresh strategies that approach this differently.`,
+    `The current implementation strategy has failed ${state.correctionCycle.attemptCount} times.\nTask: ${state.task.description}\n\nPrevious strategies tried:\n${JSON.stringify(state.prunedStrategies)}\n\nError messages from recent failures:\n${recentErrors}\n\nGenerate 2 fresh strategies that approach this differently.`,
     ReplanOutput,
     { system: 'You are a senior engineer devising alternative implementation strategies after failed attempts.' },
   );

@@ -37,8 +37,8 @@ export async function debuggerImpl(state: WorkflowState, deps: ActivityDeps): Pr
       },
       actuatorBaseUrl: deps.config.debug.actuatorBaseUrl,
       frontendBaseUrl: deps.config.frontendBaseUrl,
-      userJavaPackage: deps.config.languageConfig?.['java']?.userPackage ?? 'com.example',
-      userTsSrcRoot:   deps.config.languageConfig?.['typescript']?.userSrcRoot ?? 'src',
+      userJavaPackage: deps.config.languageConfig.java?.userPackage ?? 'com.example',
+      userTsSrcRoot:   deps.config.languageConfig.typescript?.userSrcRoot ?? 'src',
     });
 
     const observations = await debugger_.debug(state);

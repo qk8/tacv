@@ -365,15 +365,21 @@ export async function ShadowModeWorkflow(ctx: { repoPath: string; maxTasks: numb
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _diversifyStrategyCandidates(state: WorkflowState): WorkflowState {
-  const candidates = state.strategyCandidates.filter(c => !state.exhaustedBranches.includes(c.strategyId));
-  if (candidates.length < 2) return state;
-  const descriptions = candidates.map(c => c.description);
-  const diversified = candidates.map((c, idx) => ({
-    ...c,
-    avoidHint: `Do NOT use these approaches (already being tried by other branches): ${
-      descriptions.filter((_, i) => i !== idx).join('; ')
-    }. Try a fundamentally different solution — if others add code, consider removing or restructuring instead.`,
-  }));
-  return { ...state, strategyCandidates: diversified };
+export function _diversifyStrategyCandidates(state: WorkflowState): WorkflowState {
+  const active = state.strategyCandidates.filter(c => !state.exhaustedBranches.includes(c.strategyId));
+  if (active.length < 2) return state;
+  const descriptions = active.map(c => c.description);
+  // Rebuild the FULL candidates list: only inject avoidHint on active ones
+  const updatedCandidates = state.strategyCandidates.map(c => {
+    const isActive = active.some(a => a.strategyId === c.strategyId);
+    if (!isActive) return c; // exhausted — preserve as-is
+    const othersDesc = descriptions.filter(d => d !== c.description).join('; ');
+    return {
+      ...c,
+      avoidHint: `Do NOT use these approaches (already being tried by other branches): ${
+        othersDesc
+      }. Try a fundamentally different solution — if others add code, consider removing or restructuring instead.`,
+    };
+  });
+  return { ...state, strategyCandidates: updatedCandidates };
 }
