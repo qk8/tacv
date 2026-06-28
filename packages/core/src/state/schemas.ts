@@ -322,8 +322,23 @@ export function createInitialState(task: TaskSpec, sessionId?: string): Workflow
 
 export const withPhase  = (s: WorkflowState, p: WorkflowPhase): WorkflowState => ({ ...s, currentPhase: p });
 export const withCost   = (s: WorkflowState, c: number):        WorkflowState => ({ ...s, cumulativeCostUsd: c });
+
+function sanitizeKeyValues(kv: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(kv)) {
+    if (Array.isArray(v)) {
+      result[k] = v.length <= 5 ? v : `[${v.length} items]`;
+    } else if (typeof v === 'string' && v.length > 500) {
+      result[k] = v.slice(0, 497) + '...';
+    } else {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
 export const withAuditEntry = (s: WorkflowState, e: Omit<AuditEntry,'timestampMs'>): WorkflowState => ({
-  ...s, workflowAuditTrail: [...s.workflowAuditTrail, { ...e, timestampMs: Date.now() }].slice(-100),
+  ...s, workflowAuditTrail: [...s.workflowAuditTrail, { ...e, keyValues: sanitizeKeyValues(e.keyValues), timestampMs: Date.now() }].slice(-100),
 });
 export const nextAttempt = (c: CorrectionCycle, branch: string, hash: string|null=null): CorrectionCycle => ({
   ...c, attemptCount: c.attemptCount + 1, branchName: branch, lastErrorHash: hash,
