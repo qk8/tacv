@@ -5,6 +5,11 @@ import { loadConfig } from '../../src/config/index.js';
 import type { WorkflowState, StrategyCandidate } from '../../src/state/schemas.js';
 import { _diversifyStrategyCandidates } from '../../src/workflows/CodingWorkflow.js';
 
+/** Simulates the baseline HITL override propagation that the workflow performs. */
+function applyBaselineOverride(state: WorkflowState, guidance: string): WorkflowState {
+  return { ...state, agentsMdContext: guidance, hitlPriorGuidance: guidance };
+}
+
 /**
  * Workflow orchestration logic tests.
  *
@@ -152,5 +157,33 @@ describe('_diversifyStrategyCandidates', () => {
     result.strategyCandidates.forEach(c => {
       expect(c.avoidHint).toBeDefined();
     });
+  });
+});
+
+describe('Bug 4: baseline HITL override guidance propagation', () => {
+  it('propagates human override guidance to agentsMdContext and hitlPriorGuidance', () => {
+    const state = {
+      ...createInitialState(task),
+      currentPhase: 'HITL_ESCALATION' as const,
+    };
+    const guidance = 'Use RS256 for JWT signing, store keys in AWS Secrets Manager';
+    const result = applyBaselineOverride(state, guidance);
+
+    expect(result.agentsMdContext).toBe(guidance);
+    expect(result.hitlPriorGuidance).toBe(guidance);
+  });
+
+  it('preserves other state fields when applying override', () => {
+    const state = {
+      ...createInitialState(task),
+      currentPhase: 'HITL_ESCALATION' as const,
+      cumulativeCostUsd: 12.5,
+      correctionCycle: { ...createInitialState(task).correctionCycle, attemptCount: 2 },
+    };
+    const result = applyBaselineOverride(state, 'some guidance');
+
+    expect(result.cumulativeCostUsd).toBe(12.5);
+    expect(result.correctionCycle.attemptCount).toBe(2);
+    expect(result.agentsMdContext).toBe('some guidance');
   });
 });

@@ -94,6 +94,9 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     const received = await condition(() => human !== null || aborted, '48 hours');
     const hd = human as HumanDecision | null;
     if (!received || aborted || hd?.action === 'reject') return null;
+    if (hd?.action === 'override' && hd.guidance) {
+      state = { ...state, agentsMdContext: hd.guidance, hitlPriorGuidance: hd.guidance };
+    }
     if (hd) human = null;
   }
 
