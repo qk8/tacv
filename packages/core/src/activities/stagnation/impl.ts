@@ -126,7 +126,7 @@ export function updateCorrectionCycle(
  */
 export function checkStagnationImpl(
   state:     WorkflowState,
-  threshold: number = 0.40,  // Jaccard 0.4 = meaningful word overlap; 0.85 was for hash prefixes (meaningless)
+  threshold: number = 0.85,  // Jaccard 0.85 = meaningful word overlap threshold (matches config default)
 ): { pattern: StagnationPattern; newCycle: CorrectionCycle } {
   const failures      = state.verifierVerdict?.testFailures ?? [];
   const errorTexts    = failures.map(f => f.message);
