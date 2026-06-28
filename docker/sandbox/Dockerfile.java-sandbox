@@ -1,13 +1,46 @@
-FROM eclipse-temurin:21-jdk-slim
+# ── TACV Java / Spring Boot Sandbox Image ───────────────────────────────────
+#
+# Used by DockerSandboxProvider for Java projects.
+# Build: docker build -t tacv-java-sandbox:latest -f docker/sandbox/Dockerfile.java-sandbox docker/sandbox/
+#
+# Security properties:
+#  - Non-root user (sandbox, uid 1001)
+#  - JDK 21 (LTS) with Maven pre-installed
+#  - JDWP port 5005 exposed for the IntelligentDebugger
+#  - Maven local repository pre-seeded to avoid network calls inside sandbox
+# ---------------------------------------------------------------------------
 
-RUN apt-get update && apt-get install -y \
-    git curl bash maven procps \
+FROM eclipse-temurin:21-jdk-slim AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        bash \
+        curl \
+        procps \
+        ca-certificates \
+        maven \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /workspace
+# Create non-root user
+RUN useradd -m -u 1001 -s /bin/bash sandbox
 
-RUN useradd -m -u 1001 sandbox && chown -R sandbox:sandbox /workspace
+# Pre-create Maven local repository directory
+RUN mkdir -p /home/sandbox/.m2/repository && chown -R sandbox:sandbox /home/sandbox/.m2
+
+# Copy a minimal settings.xml that disables remote repository access inside
+# the sandbox (all dependencies must already be in the pre-seeded .m2 cache)
+COPY --chown=sandbox:sandbox maven-settings.xml /home/sandbox/.m2/settings.xml
+
+# Workspace directory
+WORKDIR /workspace
+RUN chown sandbox:sandbox /workspace
+
 USER sandbox
 
+# JDWP debug port (bound by DockerSandboxProvider at runtime via -p hostPort:5005)
+EXPOSE 5005
+
 LABEL org.opencontainers.image.title="TACV Java Sandbox"
-LABEL org.opencontainers.image.description="Isolated Java/Maven execution sandbox for TACV"
+LABEL org.opencontainers.image.description="Isolated JDK 21 + Maven execution sandbox for TACV"
+LABEL tacv.sandbox.language="java"
+LABEL tacv.sandbox.tools="javac,maven,junit5,mockito,assertj"

@@ -4,23 +4,27 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": "./src/index.ts"
+      "import": "./src/DockerSandboxProvider.js",
+      "types":  "./src/DockerSandboxProvider.d.ts"
     }
   },
+  "scripts": {
+    "build":      "tsc -p tsconfig.build.json",
+    "test":       "vitest run",
+    "test:cov":   "vitest run --coverage",
+    "lint":       "tsc --noEmit",
+    "clean":      "rimraf dist",
+    "docker:build-ts":   "docker build -t tacv-sandbox:latest -f ../../docker/sandbox/Dockerfile.sandbox ../../docker/sandbox/",
+    "docker:build-java": "docker build -t tacv-java-sandbox:latest -f ../../docker/sandbox/Dockerfile.java-sandbox ../../docker/sandbox/"
+  },
   "dependencies": {
-    "@tacv/core": "workspace:*",
-    "execa": "^9.3.1"
+    "@tacv/core":  "workspace:*",
+    "execa":       "^9.3.1"
   },
   "devDependencies": {
-    "vitest": "^2.0.5",
-    "rimraf": "^6.0.1",
-    "typescript": "^5.5.4",
-    "@vitest/coverage-v8": "^2.0.5"
-  },
-  "scripts": {
-    "test": "vitest run",
-    "test:cov": "vitest run --coverage",
-    "build": "tsc -p tsconfig.json",
-    "clean": "rimraf dist"
+    "@vitest/coverage-v8": "^2.0.5",
+    "rimraf":              "^6.0.1",
+    "typescript":          "^5.5.4",
+    "vitest":              "^2.0.5"
   }
 }

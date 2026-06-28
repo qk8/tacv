@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven settings for the TACV Java sandbox.
+  Network access is blocked at the Docker level (--network none), so this
+  settings.xml redirects all repository lookups to the local cache only.
+  The CI/CD pipeline must pre-seed the .m2 cache before starting the sandbox.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0
+                              https://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+  <localRepository>/home/sandbox/.m2/repository</localRepository>
+  <offline>true</offline>
+
+  <mirrors>
+    <!-- Block all remote repositories inside the sandbox -->
+    <mirror>
+      <id>sandbox-block-all</id>
+      <mirrorOf>*</mirrorOf>
+      <name>Sandbox — offline mode</name>
+      <url>file:///home/sandbox/.m2/repository</url>
+    </mirror>
+  </mirrors>
+
+</settings>

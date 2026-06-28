@@ -1,15 +1,49 @@
-FROM node:20-slim
+# ── TACV TypeScript/Node.js Sandbox Image ────────────────────────────────────
+#
+# Used by DockerSandboxProvider as the default image for TypeScript projects.
+# Build: docker build -t tacv-sandbox:latest -f docker/sandbox/Dockerfile.sandbox docker/sandbox/
+#
+# Security properties enforced at build time:
+#  - Non-root user (sandbox, uid 1001)
+#  - No sudo, no setuid binaries in /usr/local
+#  - Node.js tooling only — no curl/wget/ssh
+#  - Separate /workspace VOLUME so overlayfs upper layer mounts cleanly
+# ---------------------------------------------------------------------------
 
-RUN apt-get update && apt-get install -y \
-    git curl wget bash procps \
+FROM node:20-slim AS base
+
+# Install only what build/test tooling needs — no network utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        bash \
+        procps \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g typescript@latest vitest@latest
+# Install global Node tooling as root, then lock it down
+RUN npm install -g \
+        typescript@latest \
+        vitest@latest \
+        tsx@latest \
+        @stryker-mutator/core@latest \
+        @stryker-mutator/vitest-runner@latest \
+    && npm cache clean --force
 
+# Create non-root user
+RUN useradd -m -u 1001 -s /bin/bash sandbox
+
+# Workspace directory — overlayfs mergedDir mounts here at runtime
 WORKDIR /workspace
+RUN chown sandbox:sandbox /workspace
 
-RUN useradd -m -u 1001 sandbox && chown -R sandbox:sandbox /workspace
+# Switch to non-root for all subsequent operations
 USER sandbox
 
-LABEL org.opencontainers.image.title="TACV Sandbox"
-LABEL org.opencontainers.image.description="Isolated execution sandbox for TACV coding workflow"
+# Pre-warm npm cache directory so first install inside container is faster
+RUN mkdir -p /home/sandbox/.npm
+
+LABEL org.opencontainers.image.title="TACV TypeScript Sandbox"
+LABEL org.opencontainers.image.description="Isolated Node.js 20 execution sandbox for the TACV agentic coding workflow"
+LABEL org.opencontainers.image.source="https://github.com/your-org/tacv"
+LABEL tacv.sandbox.language="typescript"
+LABEL tacv.sandbox.tools="tsc,vitest,tsx,stryker"
