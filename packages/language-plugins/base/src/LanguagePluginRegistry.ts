@@ -2,7 +2,11 @@ import type { ILanguagePlugin } from './ILanguagePlugin.js';
 
 export class PluginNotFoundError extends Error {
   constructor(languageId: string, registered: string[]) {
-    super(`No plugin registered for language '${languageId}'. Registered: [${registered.join(', ')}]`);
+    super(
+      `No plugin registered for language '${languageId}'. ` +
+      `Available: [${registered.join(', ')}]. ` +
+      `Install @tacv/plugin-${languageId} and register it in worker.ts.`,
+    );
     this.name = 'PluginNotFoundError';
   }
 }
