@@ -55,9 +55,11 @@ export async function actorImpl(state: WorkflowState, deps: ActivityDeps): Promi
   }
   const scratchpadEntry = parts.join(' ');
 
-  const accumulatedScratchpad = state.sessionScratchpad
+  const SCRATCHPAD_MAX_CHARS = 2000;
+  const accumulatedScratchpad = (state.sessionScratchpad
     ? `${state.sessionScratchpad}\n${scratchpadEntry}`
-    : scratchpadEntry;
+    : scratchpadEntry
+  ).slice(-SCRATCHPAD_MAX_CHARS);
 
   log.info('actor.complete', {
     attempt: attempt + 1, costDelta: result.callCostUsd.toFixed(4),
