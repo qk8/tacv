@@ -52,3 +52,19 @@ describe('loadConfig', () => {
     expect(cfg.maxSelfCorrectionCycles).toBe(6); // falls back to defaults
   });
 });
+
+describe('skipTddGate config', () => {
+  it('defaults to false', () => {
+    const cfg = WorkflowConfig.parse({});
+    expect(cfg.skipTddGate).toBe(false);
+  });
+
+  it('can be set to true to skip TDD gate', () => {
+    const cfg = WorkflowConfig.parse({ skipTddGate: true });
+    expect(cfg.skipTddGate).toBe(true);
+  });
+
+  it('rejects non-boolean values', () => {
+    expect(() => WorkflowConfig.parse({ skipTddGate: 'yes' })).toThrow();
+  });
+});

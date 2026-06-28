@@ -122,7 +122,7 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
   // Critics validate the plan structure BEFORE any code is written.
   state = await runImplementationPlan(state);
 
-  state = await runTddGate(state);
+  if (!config.skipTddGate) state = await runTddGate(state);
 
   if (state.currentPhase === 'SANDBOX_VALIDATION') {
     state = await runSandboxValidation(state);

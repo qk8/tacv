@@ -189,6 +189,7 @@ export const WorkflowConfig = z.object({
   planning:     PlanningConfig.default({}),
   gitCheckpoint: GitCheckpointConfig.default({}),
   criticLanes:  CriticLanesConfig.default({}),
+  skipTddGate:  z.boolean().default(false),
 });
 export type WorkflowConfig = z.infer<typeof WorkflowConfig>;
 
