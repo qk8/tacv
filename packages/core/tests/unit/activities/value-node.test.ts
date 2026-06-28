@@ -6,14 +6,17 @@ import { makeStubDeps } from '../../helpers/stubDeps.js';
 const task = { taskId: 'vn1', description: 'test', mode: 'GREENFIELD' as const, moduleType: 'backend', languageIds: ['typescript'] };
 
 describe('valueNodeImpl', () => {
-  it('returns state unchanged with audit trail when no candidates', async () => {
+  it('creates default strategy when no candidates', async () => {
     const state = { ...createInitialState(task), strategyCandidates: [] };
     const result = await valueNodeImpl(state as never, makeStubDeps());
     expect(result.currentPhase).toBe('TDD_GATE');
-    // Should have an audit trail entry for the skip
+    // Should have created a default strategy
+    expect(result.selectedStrategy).toBeDefined();
+    expect(result.selectedStrategy?.strategyId).toContain('default');
+    // Should have an audit trail entry
     const entry = result.workflowAuditTrail.find(e => e.node === 'value_node');
     expect(entry).toBeDefined();
-    expect(entry?.decision).toBe('skipped_no_candidates');
+    expect(entry?.decision).toBe('default_strategy_used');
   });
 
   it('calls extractor when candidates exist', async () => {

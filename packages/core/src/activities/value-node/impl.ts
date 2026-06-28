@@ -4,6 +4,12 @@ import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 
+const DefaultStrategySchema = z.object({
+  strategyId: z.string(), description: z.string(),
+  compositeScore: z.number(), estimatedRisk: z.enum(['low','medium','high']),
+  affectedFiles: z.array(z.string()),
+});
+
 const log = createLogger('tacv.value_node');
 
 const ValueNodeOutput = z.object({
@@ -23,8 +29,22 @@ const ValueNodeOutput = z.object({
 export async function valueNodeImpl(state: WorkflowState, deps: ActivityDeps): Promise<WorkflowState> {
   log.info('value_node.start', { candidates: state.strategyCandidates.length });
   if (state.strategyCandidates.length === 0) {
-    log.warn('value_node.no_candidates', { taskId: state.taskId });
-    return withAuditEntry({ ...state, currentPhase: 'TDD_GATE' }, { node: 'value_node', decision: 'skipped_no_candidates', keyValues: {} });
+    log.warn('value_node.no_candidates', {
+      taskId: state.taskId,
+      hint: 'Scout returned 0 strategy candidates. Using task description as sole guidance.',
+    });
+    const defaultStrategy: StrategyCandidate = {
+      strategyId:      'default-direct',
+      description:     `Implement directly: ${state.task.description.slice(0, 200)}`,
+      compositeScore:  0.5,
+      estimatedRisk:   'medium',
+      affectedFiles:   [],
+    };
+    return withAuditEntry({
+      ...state,
+      currentPhase:     'TDD_GATE',
+      selectedStrategy: defaultStrategy,
+    }, { node: 'value_node', decision: 'default_strategy_used', keyValues: { reason: 'no_scout_candidates' } });
   }
 
   const output = await deps.extractor.extract(
