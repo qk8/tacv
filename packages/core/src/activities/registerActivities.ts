@@ -11,7 +11,6 @@ import { sandboxValidationImpl }  from './sandbox-validation/impl.js';
 import { actorImpl }              from './actor/impl.js';
 import { preflightImpl }          from './preflight/impl.js';
 import { allCriticsImpl }         from './critics/impl.js';
-import { verifierImpl }           from './verification/impl.js';
 import { flakinessCheckImpl }     from './flakiness/impl.js';
 import { testValidityReviewImpl } from './test-validity/impl.js';
 import { debuggerImpl }           from './debugger/impl.js';
@@ -49,7 +48,6 @@ export function registerActivities(deps: ActivityDeps) {
     runAllCritics:          (s: WorkflowState) => allCriticsImpl(s, ctx(s), 'all'),
     runFastCritics:         (s: WorkflowState) => allCriticsImpl(s, ctx(s), 'fast'),
     runSemanticCritics:     (s: WorkflowState) => allCriticsImpl(s, ctx(s), 'semantic'),
-    runVerifier:            (s: WorkflowState) => verifierImpl(s, ctx(s)),
     runFlakinessCheck:      (s: WorkflowState) => flakinessCheckImpl(s, ctx(s)),
     runTestValidityReview:  (s: WorkflowState) => testValidityReviewImpl(s, ctx(s)),
     runIntelligentDebugger: (s: WorkflowState) => debuggerImpl(s, ctx(s)),
