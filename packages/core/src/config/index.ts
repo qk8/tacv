@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readFileSync } from 'node:fs';
 import { createLogger } from '../observability/logger.js';
 
 const log = createLogger('tacv.config');
@@ -195,8 +196,7 @@ export function loadConfig(configPath?: string): WorkflowConfig {
   let raw: unknown = {};
   if (configPath) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      raw = JSON.parse(require('fs').readFileSync(configPath, 'utf8') as string);
+      raw = JSON.parse(readFileSync(configPath, 'utf8'));
     } catch { /* use defaults */ }
   }
   const result = WorkflowConfig.safeParse(raw);

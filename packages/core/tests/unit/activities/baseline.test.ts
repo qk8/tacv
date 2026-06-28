@@ -112,4 +112,24 @@ describe('baselineVerificationImpl', () => {
     await baselineVerificationImpl(createInitialState(t), deps);
     expect(calls).toContain('java');
   });
+
+  it('captures coverage report from baseline test run for regression detection', async () => {
+    const deps = makeStubDeps();
+    const origPlugin = deps.pluginRegistry.get('typescript');
+    deps.pluginRegistry = {
+      get: () => ({
+        ...origPlugin,
+        runProtectionTests: async () => ({
+          passed: true, totalTests: 10, failedTests: 0,
+          failures: [],
+          coverageReport: { lines: 85, branches: 70, functions: 88, statements: 86 },
+          durationMs: 450,
+        }),
+      } as never),
+      getForFile: () => null,
+    };
+    const result = await baselineVerificationImpl(createInitialState(task), deps);
+    expect(result.baselineTestResult?.coverageReport).not.toBeNull();
+    expect(result.baselineTestResult?.coverageReport?.lines).toBe(85);
+  });
 });

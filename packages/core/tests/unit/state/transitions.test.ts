@@ -98,6 +98,34 @@ describe('computeVerifierTransition', () => {
       }
     ), { numRuns: 100 });
   });
+
+  it('routes to REPLAN when all strategies exhausted', () => {
+    const s = makeState({
+      correctionCycle: { attemptCount: 3, branchName: 'main', lastErrorHash: 'abc', errorHistory: [], stagnationPattern: 'none', lastOutcomeSignature: null },
+      strategyCandidates: [
+        { strategyId: 's1', description: 'try A', compositeScore: 0.7, estimatedRisk: 'low', affectedFiles: [] },
+      ],
+      exhaustedBranches: ['s1'],
+      verifierVerdict: { testResult: 'FAIL', diagnostic: 'FIX_IMPL', testFailures: [], blockedByCritic: false, confidenceScore: 0.7 },
+    });
+    const t = computeVerifierTransition(s, defaultConfig);
+    expect(t.nextPhase).toBe('REPLAN');
+    if (t.nextPhase === 'REPLAN') expect(t.reason).toBe('all_strategies_exhausted');
+  });
+
+  it('does NOT route to REPLAN when untried candidates remain', () => {
+    const s = makeState({
+      correctionCycle: { attemptCount: 3, branchName: 'main', lastErrorHash: 'abc', errorHistory: [], stagnationPattern: 'none', lastOutcomeSignature: null },
+      strategyCandidates: [
+        { strategyId: 's1', description: 'try A', compositeScore: 0.7, estimatedRisk: 'low', affectedFiles: [] },
+        { strategyId: 's2', description: 'try B', compositeScore: 0.6, estimatedRisk: 'medium', affectedFiles: [] },
+      ],
+      exhaustedBranches: ['s1'],
+      verifierVerdict: { testResult: 'FAIL', diagnostic: 'FIX_IMPL', testFailures: [], blockedByCritic: false, confidenceScore: 0.7 },
+    });
+    const t = computeVerifierTransition(s, defaultConfig);
+    expect(t.nextPhase).not.toBe('REPLAN');
+  });
 });
 
 describe('computeConfidenceScore', () => {

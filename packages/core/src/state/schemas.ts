@@ -196,11 +196,12 @@ export type ScopeViolation = z.infer<typeof ScopeViolation>;
 // ── Redesign additions ─────────────────────────────────────────────────────────
 
 export const BaselineTestResult = z.object({
-  passed:       z.boolean(),
-  failureCount: z.number().int().min(0),
-  failures:     z.array(TestFailure),
-  durationMs:   z.number(),
-  ranAt:        z.number(),
+  passed:         z.boolean(),
+  failureCount:   z.number().int().min(0),
+  failures:       z.array(TestFailure),
+  durationMs:     z.number(),
+  ranAt:          z.number(),
+  coverageReport: z.object({ lines: z.number(), branches: z.number(), functions: z.number(), statements: z.number() }).nullable(),
 });
 export type BaselineTestResult = z.infer<typeof BaselineTestResult>;
 

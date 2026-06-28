@@ -49,11 +49,12 @@ export async function baselineVerificationImpl(
   }
 
   const baseline: BaselineTestResult = {
-    passed:       testResult.passed,
-    failureCount: testResult.failures.length,
-    failures:     testResult.failures,
-    durationMs:   Date.now() - startMs,
-    ranAt:        startMs,
+    passed:         testResult.passed,
+    failureCount:   testResult.failures.length,
+    failures:       testResult.failures,
+    durationMs:     Date.now() - startMs,
+    ranAt:          startMs,
+    coverageReport: testResult.coverageReport,
   };
 
   log.info('baseline.complete', {

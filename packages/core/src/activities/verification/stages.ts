@@ -2,6 +2,7 @@ import type { WorkflowState, TestFailure } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
 import { checkCoverageRegression } from './coverageCheck.js';
+import { isBackendModule } from '../critics/shared.js';
 
 const log = createLogger('tacv.verifier.staged');
 
@@ -89,7 +90,7 @@ export async function verifierTypeCheckStage(
   log.info('verifier.typecheck.start', { langId, files: state.diffProposal.diffs.length });
 
   try {
-    const tcResult = await plugin.typeCheck(deps.repoPath, state.diffProposal.diffs);
+    const tcResult = await plugin.typeCheck(deps.repoPath, state.diffProposal.diffs.map(d => d.filePath));
     if (tcResult.violations.length > 0) {
       const failures: TestFailure[] = tcResult.violations.map(v => ({
         testName: v.ruleId,
@@ -199,15 +200,29 @@ export async function verifierTestsStage(
 
     // ── Coverage check (non-blocking warning only) ──────────────────────────
     const coverageReport = accResult.coverageReport ?? protResult.coverageReport;
-    if (coverageReport) {
-      const coverageOk = checkCoverageRegression(coverageReport, deps.config.coverage);
+    const baselineCoverage = state.baselineTestResult?.coverageReport;
+    if (coverageReport && baselineCoverage) {
+      const coverageOk = checkCoverageRegression(baselineCoverage, coverageReport, deps.config.coverage);
       if (!coverageOk.passed) {
-        log.warn('verifier.tests.coverage_regression', { delta: coverageOk.lineDelta });
+        log.warn('verifier.tests.coverage_regression', { violations: coverageOk.violations });
         // Coverage regression is a soft fail — record it but don't block
         return {
           ...state,
           verifierVerdict: failVerdict(
-            [{ testName: 'coverage', message: coverageOk.reason }],
+            coverageOk.violations.map(v => ({ testName: 'coverage', message: v.message })),
+            'FIX_TEST',
+            state,
+          ),
+        };
+      }
+    } else if (coverageReport && !baselineCoverage) {
+      // No baseline available — check against minimum threshold only
+      const minLine = deps.config.coverage.minimumLineCoverage;
+      if (coverageReport.lines < minLine) {
+        return {
+          ...state,
+          verifierVerdict: failVerdict(
+            [{ testName: 'coverage', message: `Line coverage ${coverageReport.lines.toFixed(1)}% < minimum ${minLine}%` }],
             'FIX_TEST',
             state,
           ),
@@ -257,7 +272,7 @@ export async function verifierApiStage(
     log.info('verifier.api.skipped_prior_fail');
     return state;
   }
-  if (state.task.moduleType !== 'backend' || !state.diffProposal) {
+  if (!isBackendModule(state.task.moduleType) || !state.diffProposal) {
     return { ...state, verifierVerdict: passVerdict(state) };
   }
 
@@ -266,26 +281,41 @@ export async function verifierApiStage(
 
   try {
     const apiResult = await plugin.runApiTests(deps.repoPath);
+    // Map plugin API test result to the schema-typed ApiTestResult
+    const mappedApiResult: import('../../state/schemas.js').ApiTestResult = {
+      passed: apiResult.passed,
+      totalTests: apiResult.totalTests,
+      failedTests: apiResult.failedTests,
+      failures: (apiResult.failures as Array<{ testName?: string; message?: string; endpoint?: string; method?: string; expectedStatus?: number; actualStatus?: number }>).map(f => ({
+        testName: f.testName ?? 'unknown',
+        endpoint: f.endpoint ?? '',
+        method: f.method ?? '',
+        expectedStatus: f.expectedStatus ?? 0,
+        actualStatus: f.actualStatus ?? 0,
+        message: f.message ?? String(apiResult),
+      })),
+      durationMs: apiResult.durationMs ?? 0,
+    };
     if (!apiResult.passed) {
-      const failures = apiResult.failures.map((f: { testName: string; message: string }) => ({
+      const failures: TestFailure[] = mappedApiResult.failures.map(f => ({
         testName: f.testName,
         message:  `[api] ${f.message}`,
       }));
-      log.warn('verifier.api.fail', { count: apiResult.failedTests });
+      log.warn('verifier.api.fail', { count: mappedApiResult.failedTests });
       return {
         ...state,
-        apiTestResult:  apiResult,
+        apiTestResult:  mappedApiResult,
         verifierVerdict: failVerdict(failures, 'FIX_IMPL', state),
         workflowAuditTrail: [...state.workflowAuditTrail, {
           timestampMs: Date.now(), node: 'verifier_api',
-          decision: 'FAIL', keyValues: { count: apiResult.failedTests },
+          decision: 'FAIL', keyValues: { count: mappedApiResult.failedTests },
         }],
       };
     }
     log.info('verifier.api.pass');
     return {
       ...state,
-      apiTestResult: apiResult,
+      apiTestResult: mappedApiResult,
       verifierVerdict: passVerdict(state),
     };
   } catch (err) {
@@ -403,13 +433,14 @@ export async function verifierVisualStage(
     const { runVisualTests } = await import('./visualTests.js');
     const visualResult = await runVisualTests(state, deps);
 
-    if (visualResult.diffs.some((d: { diffPercent: number }) => d.diffPercent > deps.config.visual.maxDiffPercent)) {
-      const failures: TestFailure[] = visualResult.diffs
-        .filter((d: { diffPercent: number }) => d.diffPercent > deps.config.visual.maxDiffPercent)
-        .map((d: { component: string; viewport: string; diffPercent: number }) => ({
-          testName: `visual:${d.component}:${d.viewport}`,
-          message:  `Visual diff ${d.diffPercent.toFixed(2)}% exceeds ${deps.config.visual.maxDiffPercent}%`,
-        }));
+    const maxDiff = deps.config.visual.maxDiffPercent;
+    const failing = visualResult.diffs.filter(d => !d.passed && d.pixelDiffPct > maxDiff);
+
+    if (failing.length > 0) {
+      const failures: TestFailure[] = failing.map(d => ({
+        testName: `visual:${d.testName}@${d.viewport}`,
+        message:  `Visual diff ${d.pixelDiffPct.toFixed(2)}% exceeds ${maxDiff}%`,
+      }));
       log.warn('verifier.visual.fail', { count: failures.length });
       return {
         ...state,

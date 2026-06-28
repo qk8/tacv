@@ -88,18 +88,30 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     log.warn('workflow.baseline_failed_hitl', {
       hint: 'Tests were already failing before agent started — fix baseline first',
     });
-    state = await runHitlEscalation(state, 'max_cycles_without_progress');
+    state = await runHitlEscalation(state, 'baseline_tests_failing');
     const received = await condition(() => human !== null || aborted, '48 hours');
-    if (!received || aborted || human?.action === 'reject') return null;
-    human = null;
+    const hd = human as HumanDecision | null;
+    if (!received || aborted || hd?.action === 'reject') return null;
+    if (hd) human = null;
   }
 
   // Feasibility check (escalate early on ambiguous/high-risk tasks)
   state = await runFeasibilityCheck(state);
   if (state.currentPhase === 'HITL_ESCALATION') {
-    state = await _handleHitl(state, 'high_ambiguity_before_start', config, human, aborted, runHitlEscalation);
-    if (state.currentPhase === 'FAILED') return null;
-    human = null;
+    state = await runHitlEscalation(state, 'high_ambiguity_before_start');
+    const received = await condition(() => human !== null || aborted, '48 hours');
+    const hd = human as HumanDecision | null;
+    if (!received || aborted || hd?.action === 'reject') {
+      state = withPhase(state, 'FAILED');
+      return null;
+    }
+    if (hd) {
+      if (hd.action === 'override' && hd.guidance) {
+        state = { ...state, agentsMdContext: hd.guidance, hitlPriorGuidance: hd.guidance };
+      }
+      human = null;
+    }
+    state = withPhase(state, 'VALUE_NODE');
   }
 
   state = await runValueNode(state);
@@ -173,7 +185,8 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     if (transition.nextPhase === 'HITL_ESCALATION') {
       state = await runHitlEscalation(state, transition.reason);
       const received = await condition(() => human !== null || aborted, '48 hours');
-      if (!received || aborted || human?.action === 'reject') { state = withPhase(state, 'FAILED'); break; }
+      const hd = human as HumanDecision | null;
+      if (!received || aborted || hd?.action === 'reject') { state = withPhase(state, 'FAILED'); break; }
 
       const budgetAtEsc     = state.hitlBudgetAtEscalation ?? state.cumulativeCostUsd;
       const budgetRemaining = config.tokenBudget.criticalDollar - budgetAtEsc;
@@ -182,10 +195,12 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
         state = withPhase(state, 'FAILED'); break;
       }
 
-      if (human?.action === 'override' && human.guidance) {
-        state = { ...state, agentsMdContext: human.guidance, hitlPriorGuidance: human.guidance };
+      if (hd) {
+        if (hd.action === 'override' && hd.guidance) {
+          state = { ...state, agentsMdContext: hd.guidance, hitlPriorGuidance: hd.guidance };
+        }
+        human = null;
       }
-      human = null;
       state = withPhase(state, 'ACTOR');
       continue;
     }
@@ -325,17 +340,4 @@ function _diversifyStrategyCandidates(state: WorkflowState): WorkflowState {
     }. Try a fundamentally different solution — if others add code, consider removing or restructuring instead.`,
   }));
   return { ...state, strategyCandidates: diversified };
-}
-
-async function _handleHitl(
-  state:    WorkflowState,
-  reason:   EscalationReason,
-  _config:  WorkflowConfig,
-  human:    HumanDecision | null,
-  aborted:  boolean,
-  runHitl:  (s: WorkflowState, r: EscalationReason) => Promise<WorkflowState>,
-): Promise<WorkflowState> {
-  const s = await runHitl(state, reason);
-  if (aborted || human?.action === 'reject') return withPhase(s, 'FAILED');
-  return s;
 }

@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadConfig, WorkflowConfig } from '../../../src/config/index.js';
 
 describe('loadConfig', () => {
@@ -28,5 +31,24 @@ describe('loadConfig', () => {
   it('accepts valid viewport list', () => {
     const cfg = WorkflowConfig.parse({ visual: { viewports: ['mobile', 'desktop'] } });
     expect(cfg.visual.viewports).toContain('mobile');
+  });
+
+  it('loads config from a JSON file path using ESM-compatible reads', async () => {
+    const dir = await mkdtemp(join(await tmpdir(), 'tacv-config-'));
+    const configPath = join(dir, 'tacv.json');
+    const rawConfig = { maxSelfCorrectionCycles: 12, agentModel: 'claude-sonnet-4-20250514' };
+    await writeFile(configPath, JSON.stringify(rawConfig));
+
+    const cfg = loadConfig(configPath);
+    expect(cfg.maxSelfCorrectionCycles).toBe(12);
+    expect(cfg.agentModel).toBe('claude-sonnet-4-20250514');
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('gracefully handles missing config file', () => {
+    const cfg = loadConfig('/nonexistent/path/tacv.json');
+    expect(cfg).toBeDefined();
+    expect(cfg.maxSelfCorrectionCycles).toBe(6); // falls back to defaults
   });
 });
