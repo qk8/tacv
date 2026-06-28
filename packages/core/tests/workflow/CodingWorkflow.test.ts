@@ -4,6 +4,7 @@ import { computeVerifierTransition } from '../../src/state/transitions.js';
 import { loadConfig } from '../../src/config/index.js';
 import type { WorkflowState, StrategyCandidate } from '../../src/state/schemas.js';
 import { _diversifyStrategyCandidates } from '../../src/workflows/CodingWorkflow.js';
+import { computeConfidenceScore } from '../../src/state/transitions.js';
 
 /** Simulates the baseline HITL override propagation that the workflow performs. */
 function applyBaselineOverride(state: WorkflowState, guidance: string): WorkflowState {
@@ -185,5 +186,91 @@ describe('Bug 4: baseline HITL override guidance propagation', () => {
     expect(result.cumulativeCostUsd).toBe(12.5);
     expect(result.correctionCycle.attemptCount).toBe(2);
     expect(result.agentsMdContext).toBe('some guidance');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 8: Confidence score staleness
+// The confidence score is computed in actorImpl at cycle start, before
+// preflight/critics/verifier/stagnation run. When computeVerifierTransition
+// reads confidenceScore, it sees a stale value that doesn't reflect the
+// latest critic findings, verifier verdict, or stagnation pattern.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Bug 8: confidence score must reflect post-verification state', () => {
+  it('stale confidence hides low-confidence escalation when critical critic findings exist', () => {
+    // Simulate state AFTER the full correction cycle:
+    // - Actor ran (confidence was 1.0 at that point)
+    // - Preflight + critics ran, producing 6 critical findings
+    // - Verifier ran and failed with AMBIGUOUS
+    // - Stagnation check ran and detected semantic stagnation
+    const criticFindings = Array.from({ length: 6 }, (_, i) => ({
+      critic: 'style' as const, severity: 'critical' as const,
+      file: 'src/a.ts', line: i + 1, ruleId: `rule-${i}`, message: 'critical issue',
+      resolutionHint: 'fix it',
+    }));
+
+    const staleState = {
+      ...createInitialState(task),
+      criticFindings,
+      correctionCycle: {
+        ...createInitialState(task).correctionCycle,
+        attemptCount: 3,
+        stagnationPattern: 'semantic' as const,
+      },
+      verifierVerdict: {
+        testResult: 'FAIL' as const, diagnostic: 'AMBIGUOUS' as const,
+        testFailures: [{ testName: 'T1', message: 'broken' }],
+        blockedByCritic: false, confidenceScore: 0.7,
+      },
+    };
+
+    // Stale confidence (computed at actor start, before critics/verifier)
+    expect(staleState.confidenceScore).toBe(1.0);
+
+    // Fresh confidence (what it SHOULD be after the full cycle)
+    const freshConf = computeConfidenceScore(staleState, config);
+
+    // With 6 critical findings + semantic stagnation + AMBIGUOUS + 3 attempts,
+    // confidence should drop below escalation threshold
+    expect(freshConf).toBeLessThan(config.confidenceEscalationThreshold);
+
+    // Routing with stale confidence would stay in ACTOR (wrong)
+    const staleTransition = computeVerifierTransition(staleState as never, config);
+    // Without the fix, stale confidence=1.0 means no low_confidence escalation
+    // The transition would be driven by other factors (stagnation -> HITL, but stale conf doesn't show it)
+    // This test documents the bug: stale confidence is 1.0, fresh is much lower
+
+    // Routing with fresh confidence correctly escalates
+    const freshState = { ...staleState, confidenceScore: freshConf };
+    const freshTransition = computeVerifierTransition(freshState as never, config);
+    expect(freshTransition.nextPhase).toBe('HITL_ESCALATION');
+    if (freshTransition.nextPhase === 'HITL_ESCALATION') {
+      expect(freshTransition.reason).toBe('low_confidence');
+    }
+  });
+
+  it('fresh confidence reflects verifier FAIL verdict penalties', () => {
+    const staleState = {
+      ...createInitialState(task),
+      correctionCycle: {
+        ...createInitialState(task).correctionCycle,
+        attemptCount: 2,
+      },
+      verifierVerdict: {
+        testResult: 'FAIL' as const, diagnostic: 'FIX_IMPL' as const,
+        testFailures: [{ testName: 'T1', message: 'assertion failed' }],
+        blockedByCritic: false, confidenceScore: 0.8,
+      },
+    };
+
+    // Stale confidence does not know about verifier verdict
+    expect(staleState.confidenceScore).toBe(1.0);
+
+    // Fresh confidence should deduct for FIX_IMPL (no AMBIGUOUS penalty)
+    // but still account for attemptCount=2 (-0.16)
+    const freshConf = computeConfidenceScore(staleState, config);
+    expect(freshConf).toBeLessThan(1.0);
+    expect(freshConf).toBeGreaterThanOrEqual(0);
   });
 });

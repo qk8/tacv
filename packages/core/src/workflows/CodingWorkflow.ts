@@ -5,7 +5,7 @@ import {
 import type { RegisteredActivities } from '../activities/registerActivities.js';
 import type { TaskSpec, WorkflowState, LessonLearned } from '../state/schemas.js';
 import { createInitialState, withPhase, withAuditEntry, withCost } from '../state/schemas.js';
-import { computeVerifierTransition } from '../state/transitions.js';
+import { computeVerifierTransition, computeConfidenceScore } from '../state/transitions.js';
 import type { WorkflowConfig } from '../config/index.js';
 import type { EscalationReason } from '../state/transitions.js';
 
@@ -196,6 +196,11 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     // Update stagnation state — compare current failure hash to history
     // before the transition logic reads stagnationPattern to decide routing.
     state = await runStagnationCheck(state);
+
+    // Recompute confidence score after all cycle phases have run.
+    // The score computed in actorImpl is stale — it doesn't reflect
+    // critic findings, verifier verdict, or the updated stagnation pattern.
+    state = { ...state, confidenceScore: computeConfidenceScore(state, config) };
 
     // Compute routing transition
     const transition = computeVerifierTransition(state, config);
