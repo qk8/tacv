@@ -160,6 +160,28 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
         state = withAuditEntry(state, { node: 'flakiness_routing', decision: 'flaky_tests_back_to_actor', keyValues: { tests: state.flakinessReport.flakyTests } });
         continue;
       }
+
+      // Test validity review — check if failures are test faults vs. impl faults
+      // Runs after flakiness is ruled out, starting at cycle >= config.testValidity.triggerAfterCycles
+      if (config.testValidity.enabled && state.correctionCycle.attemptCount >= config.testValidity.triggerAfterCycles) {
+        state = await runTestValidityReview(state);
+        if (state.currentPhase === 'HITL_ESCALATION') {
+          log.warn('workflow.test_fault_detected', {
+            tests: state.testValidityFlag?.affectedTests,
+            confidence: state.testValidityFlag?.confidence,
+          });
+          state = await runHitlEscalation(state, 'test_fault_needs_human_approval');
+          const received = await condition(() => human !== null || aborted, '48 hours');
+          const hd = human as HumanDecision | null;
+          if (!received || aborted || hd?.action === 'reject') { state = withPhase(state, 'FAILED'); break; }
+          if (hd?.action === 'override' && hd.guidance) {
+            state = { ...state, agentsMdContext: hd.guidance, hitlPriorGuidance: hd.guidance };
+          }
+          human = null;
+          state = withPhase(state, 'ACTOR');
+          continue;
+        }
+      }
     }
 
     // ★ REDESIGN: Git checkpoint after every verifier PASS
