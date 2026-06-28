@@ -27,6 +27,8 @@ const {
   runHitlEscalation, runMemoryConsolidation,
   // Redesign: new activities
   runBaselineVerification, runImplementationPlan, runGitCheckpoint,
+  // Stagnation detection — pure computation, no I/O
+  runStagnationCheck,
 } = proxyActivities<RegisteredActivities>({
   startToCloseTimeout: '10 minutes',
   retry: {
@@ -165,6 +167,10 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     if (state.verifierVerdict?.testResult === 'PASS') {
       state = await runGitCheckpoint(state);
     }
+
+    // Update stagnation state — compare current failure hash to history
+    // before the transition logic reads stagnationPattern to decide routing.
+    state = await runStagnationCheck(state);
 
     // Compute routing transition
     const transition = computeVerifierTransition(state, config);

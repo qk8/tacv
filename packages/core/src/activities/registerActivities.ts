@@ -24,6 +24,7 @@ import { runShadowCycleImpl }     from './shadow/impl.js';
 import { baselineVerificationImpl } from './baseline/impl.js';
 import { implementationPlanImpl }   from './planning/impl.js';
 import { gitCheckpointImpl }        from './git-checkpoint/impl.js';
+import { checkStagnationImpl }      from './stagnation/impl.js';
 import {
   verifierTypeCheckStage,
   verifierTestsStage,
@@ -68,6 +69,12 @@ export function registerActivities(deps: ActivityDeps) {
     runVerifierApi:        (s: WorkflowState) => verifierApiStage(s, ctx(s)),
     runVerifierMutation:   (s: WorkflowState) => verifierMutationStage(s, ctx(s)),
     runVerifierVisual:     (s: WorkflowState) => verifierVisualStage(s, ctx(s)),
+
+    // Stagnation detection — pure computation, no I/O
+    runStagnationCheck: (s: WorkflowState) => {
+      const { pattern, newCycle } = checkStagnationImpl(s, deps.config.stagnation.semanticSimilarityThreshold);
+      return Promise.resolve({ ...s, correctionCycle: newCycle });
+    },
   };
 }
 
