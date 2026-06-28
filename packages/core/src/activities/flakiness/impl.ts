@@ -25,13 +25,13 @@ export async function flakinessCheckImpl(state: WorkflowState, deps: ActivityDep
   const flakyTests: Array<{ testFile: string; passRate: number; runCount: number }> = [];
 
   for (const testFile of suspectFiles.slice(0, 5)) { // cap at 5 files
-    const runs = await Promise.all(
-      Array.from({ length: cfg.runCount }, () =>
-        plugin.runAcceptanceTests(deps.repoPath, [testFile], { timeout: 30_000 })
-          .then(r => r.passed)
-          .catch(() => false),
-      ),
-    );
+    const runs: boolean[] = [];
+    for (let i = 0; i < cfg.runCount; i++) {
+      const passed = await plugin.runAcceptanceTests(deps.repoPath, [testFile], { timeout: 30_000 })
+        .then(r => r.passed)
+        .catch(() => false);
+      runs.push(passed);
+    }
     const passRate = runs.filter(Boolean).length / runs.length;
     if (passRate > 0 && passRate < cfg.passThreshold) {
       flakyTests.push({ testFile, passRate, runCount: cfg.runCount });

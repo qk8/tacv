@@ -80,3 +80,34 @@ describe('flakinessCheckImpl', () => {
     }
   });
 });
+
+describe('flakinessCheckImpl — sequential execution', () => {
+  it('runs tests sequentially, not concurrently', async () => {
+    const deps = makeStubDeps();
+    deps.config = { ...deps.config, flakiness: { enabled: true, runCount: 3, passThreshold: 1.0 } };
+
+    let maxConcurrent = 0;
+    let currentConcurrent = 0;
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    const _savedPlugin = deps.pluginRegistry.get('typescript');
+    deps.pluginRegistry = {
+      get: () => ({ ..._savedPlugin,
+        runAcceptanceTests: async () => {
+          currentConcurrent++;
+          maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+          await delay(50);
+          currentConcurrent--;
+          return { passed: false, totalTests: 1, failedTests: 1, failures: [], coverageReport: null, durationMs: 50 };
+        },
+      } as never),
+      getForFile: () => null,
+    };
+
+    await flakinessCheckImpl(failingState() as never, deps);
+
+    // If runs were concurrent, maxConcurrent would be 3 (cfg.runCount).
+    // With sequential runs, maxConcurrent should be 1.
+    expect(maxConcurrent).toBe(1);
+  });
+});
