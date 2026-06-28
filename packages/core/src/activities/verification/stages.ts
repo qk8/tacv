@@ -148,6 +148,13 @@ export async function verifierTestsStage(
   const plugin = deps.pluginRegistry.get(langId);
   log.info('verifier.tests.start', { langId });
 
+  // Populate selectedTestFiles from diffProposal if not already set
+  let testFilesToRun = state.selectedTestFiles;
+  if (testFilesToRun.length === 0 && state.diffProposal?.testFilePaths.length) {
+    testFilesToRun = state.diffProposal.testFilePaths;
+    log.info('verifier.tests.selected_from_diff', { count: testFilesToRun.length });
+  }
+
   // ── Protection tests ─────────────────────────────────────────────────────
   try {
     const protResult = await plugin.runProtectionTests(deps.repoPath, {
@@ -168,7 +175,7 @@ export async function verifierTestsStage(
     // ── Acceptance tests ────────────────────────────────────────────────────
     const accResult = await plugin.runAcceptanceTests(
       deps.repoPath,
-      state.selectedTestFiles,
+      testFilesToRun,
       { timeout: deps.config.testTimeoutMs },
     );
     if (!accResult.passed) {
@@ -229,8 +236,9 @@ export async function verifierTestsStage(
   log.info('verifier.tests.pass');
   return withAuditEntry({
     ...state,
+    selectedTestFiles: testFilesToRun,
     verifierVerdict: passVerdict(state),
-  }, { node: 'verifier_tests', decision: 'PASS', keyValues: {} });
+  }, { node: 'verifier_tests', decision: 'PASS', keyValues: { testFiles: testFilesToRun.length } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

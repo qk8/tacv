@@ -72,6 +72,12 @@ describe('verifierTestsStage', () => {
     expect(result.verifierVerdict?.testResult).toBe('PASS');
   });
 
+  it('populates selectedTestFiles from diffProposal.testFilePaths when empty', async () => {
+    const result = await verifierTestsStage(stateWithDiff() as never, makeStubDeps());
+    expect((result.selectedTestFiles as string[]).length).toBeGreaterThan(0);
+    expect(result.selectedTestFiles).toContain('src/User.test.ts');
+  });
+
   it('returns FAIL FIX_IMPL when protection tests fail', async () => {
     const deps = makeStubDeps();
     const orig = deps.pluginRegistry.get('typescript');
