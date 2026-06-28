@@ -58,3 +58,16 @@ describe('TaskSpec validation', () => {
     expect(() => TaskSpec.parse({ ...task, mode: 'INVALID' })).toThrow();
   });
 });
+
+describe('createInitialState — deterministic sessionId', () => {
+  it('accepts an optional sessionId for Temporal determinism', () => {
+    const s = createInitialState(task, 'workflow-id-123');
+    expect(s.sessionId).toBe('workflow-id-123');
+  });
+
+  it('still generates unique sessionId when no sessionId is passed', () => {
+    const s1 = createInitialState(task);
+    const s2 = createInitialState(task);
+    expect(s1.sessionId).not.toBe(s2.sessionId);
+  });
+});

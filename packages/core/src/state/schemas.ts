@@ -296,9 +296,9 @@ export const WorkflowState = z.object({
 export type WorkflowState = z.infer<typeof WorkflowState>;
 
 // ── Factory & helpers ─────────────────────────────────────────────────────────
-export function createInitialState(task: TaskSpec): WorkflowState {
+export function createInitialState(task: TaskSpec, sessionId?: string): WorkflowState {
   return WorkflowState.parse({
-    taskId: task.taskId, sessionId: crypto.randomUUID(),
+    taskId: task.taskId, sessionId: sessionId ?? crypto.randomUUID(),
     task, currentPhase: 'BOOTSTRAP' as WorkflowPhase,
     workflowStartMs: Date.now(),
     contextSkeleton: null, blastRadiusMap: null, agentsMdContext: null, gitBlameContext: null,

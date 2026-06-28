@@ -71,7 +71,7 @@ const { runVerifierVisual } = proxyActivities<RegisteredActivities>({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Promise<LessonLearned | null> {
-  let state   = createInitialState(task);
+  let state   = createInitialState(task, workflowInfo().workflowId);
   let human:  HumanDecision | null = null;
   let aborted = false;
 
