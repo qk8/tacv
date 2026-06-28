@@ -180,6 +180,10 @@ export async function createDeps(config: WorkflowConfig): Promise<ActivityDeps> 
     log.info('createDeps.plugin_registered', { languageId: 'python' });
   } catch { /* not installed — skip silently */ }
 
+  // ── Validate repoPath ──────────────────────────────────────────────────────
+  const { validateRepoPath: validateRepoPath_ } = await import('./infrastructure/repoPathValidation.js');
+  await validateRepoPath_(config.repoPath);
+
   return {
     config,
     agent,
