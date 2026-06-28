@@ -46,16 +46,33 @@ export async function scoutImpl(state: WorkflowState, deps: ActivityDeps): Promi
     }
   }
 
-  // Fetch relevant memory
+  // Fetch relevant memory — episodic lessons + procedural/shadow findings
   let memoryContext = '';
   try {
-    const memories = await deps.memory.search({
-      userId: 'global', agentId: 'tacv-agent',
-      text:   state.task.description, topK: 5,
-      filters: { type: 'episodic', subtype: 'lesson_learned' },
-    });
-    if (memories.length > 0) {
-      memoryContext = '## Prior lessons:\n' + memories.map(m => `- ${m.text.slice(0,200)}`).join('\n');
+    const [episodic, procedural] = await Promise.allSettled([
+      deps.memory.search({
+        userId: 'global', agentId: 'tacv-agent',
+        text: state.task.description, topK: 5,
+        filters: { type: 'episodic', subtype: 'lesson_learned' },
+      }),
+      deps.memory.search({
+        userId: 'global', agentId: 'tacv-shadow',
+        text: state.task.description, topK: 3,
+        filters: { type: 'procedural' },
+      }),
+    ]);
+
+    const lessonMems   = episodic.status === 'fulfilled' ? episodic.value : [];
+    const proceduralMs = procedural.status === 'fulfilled' ? procedural.value : [];
+
+    if (lessonMems.length > 0 || proceduralMs.length > 0) {
+      const lessonPart     = lessonMems.length > 0
+        ? `## Prior task lessons:\n${lessonMems.map(m => `- ${m.text.slice(0,200)}`).join('\n')}`
+        : '';
+      const proceduralPart = proceduralMs.length > 0
+        ? `## Recurring patterns / shadow findings:\n${proceduralMs.map(m => `- ${m.text.slice(0,150)}`).join('\n')}`
+        : '';
+      memoryContext = [lessonPart, proceduralPart].filter(Boolean).join('\n\n');
     }
   } catch (err) {
     log.warn('scout.memory_search_failed', { error: String(err) });
