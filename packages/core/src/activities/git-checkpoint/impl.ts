@@ -1,10 +1,10 @@
 import type { WorkflowState, GitCheckpoint } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const log = createLogger('tacv.git_checkpoint');
 
 /**
@@ -77,6 +77,10 @@ export async function gitCheckpointImpl(
 }
 
 async function runGit(cmd: string, cwd: string): Promise<string> {
-  const { stdout } = await execAsync(cmd, { cwd });
+  // Parse command string into file + args to avoid shell interpretation.
+  // execFile does NOT invoke a shell, so $() backticks etc. are safe literal data.
+  const parts = cmd.trim().split(/\s+/);
+  const [file, ...args] = parts;
+  const { stdout } = await execFileAsync(file!, args, { cwd });
   return stdout.trim();
 }
