@@ -23,7 +23,8 @@ const ValueNodeOutput = z.object({
 export async function valueNodeImpl(state: WorkflowState, deps: ActivityDeps): Promise<WorkflowState> {
   log.info('value_node.start', { candidates: state.strategyCandidates.length });
   if (state.strategyCandidates.length === 0) {
-    return { ...state, currentPhase: 'TDD_GATE' };
+    log.warn('value_node.no_candidates', { taskId: state.taskId });
+    return withAuditEntry({ ...state, currentPhase: 'TDD_GATE' }, { node: 'value_node', decision: 'skipped_no_candidates', keyValues: {} });
   }
 
   const output = await deps.extractor.extract(
