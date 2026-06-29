@@ -337,8 +337,28 @@ function sanitizeKeyValues(kv: Record<string, unknown>): Record<string, unknown>
   return result;
 }
 
+const AUDIT_TRAIL_MAX   = 200;
+const AUDIT_TRAIL_PRUNE = 150;
+
+/**
+ * Smart audit trail eviction: preserve first 10 (setup), HITL/baseline entries,
+ * and last 50 (recent). Fills gap with most recent middle entries when few HITL entries exist.
+ */
+function pruneAuditTrail(trail: AuditEntry[]): AuditEntry[] {
+  if (trail.length <= AUDIT_TRAIL_MAX) return trail;
+  const first  = trail.slice(0, 10);
+  const last   = trail.slice(-50);
+  const middle = trail.slice(10, -50);
+  const hitl   = middle.filter(t => t.node === 'hitl_escalation' || t.node === 'baseline_verification');
+  // Fill remaining budget with newest middle entries to reach AUDIT_TRAIL_PRUNE
+  const remaining = AUDIT_TRAIL_PRUNE - first.length - hitl.length - last.length;
+  const middleFill = remaining > 0 ? middle.slice(-remaining) : [];
+  return [...first, ...hitl, ...middleFill, ...last];
+}
+
 export const withAuditEntry = (s: WorkflowState, e: Omit<AuditEntry,'timestampMs'>): WorkflowState => ({
-  ...s, workflowAuditTrail: [...s.workflowAuditTrail, { ...e, keyValues: sanitizeKeyValues(e.keyValues), timestampMs: Date.now() }].slice(-100),
+  ...s,
+  workflowAuditTrail: pruneAuditTrail([...s.workflowAuditTrail, { ...e, keyValues: sanitizeKeyValues(e.keyValues), timestampMs: Date.now() }]),
 });
 export const nextAttempt = (c: CorrectionCycle, branch: string, hash: string|null=null): CorrectionCycle => ({
   ...c, attemptCount: c.attemptCount + 1, branchName: branch, lastErrorHash: hash,
