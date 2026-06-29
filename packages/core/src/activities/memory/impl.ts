@@ -92,7 +92,7 @@ export async function memoryConsolidationImpl(state: WorkflowState, deps: Activi
     log.info('memory_consolidation.session_purged', { purgedCount: noise.length });
   } catch (err) { log.warn('memory_consolidation.purge_failed', { error: String(err) }); }
 
-  // Update AGENTS.md
+  // Update AGENTS.md with size management
   if (lesson.keyDecisions.length > 0 || lesson.commonMistakes.length > 0) {
     try {
       const agentsMdPath = path.join(deps.repoPath, 'AGENTS.md');
@@ -100,8 +100,53 @@ export async function memoryConsolidationImpl(state: WorkflowState, deps: Activi
       const addition = `\n## Session ${new Date().toISOString().slice(0,10)} — ${lesson.taskDescription.slice(0,60)}\n` +
         (lesson.keyDecisions.length > 0 ? `### Key Decisions\n${lesson.keyDecisions.map(d=>`- ${d}`).join('\n')}\n` : '') +
         (lesson.commonMistakes.length > 0 ? `### Avoid These Mistakes\n${lesson.commonMistakes.map(m=>`- ${m}`).join('\n')}\n` : '');
-      await fs.writeFile(agentsMdPath, existing + addition);
-      log.info('memory_consolidation.agents_md_updated');
+      const proposed = existing + addition;
+
+      const maxChars = deps.config.agentsMdMaxChars ?? 8000;
+      const consolidationThreshold = Math.floor(maxChars * 0.8);
+
+      if (proposed.length > consolidationThreshold) {
+        // Consolidate: keep recent entries and last 60% of content, summarize the rest
+        const entries = parseAgentsMdEntries(existing);
+        const newEntry = `## Session ${new Date().toISOString().slice(0,10)} — ${lesson.taskDescription.slice(0,60)}\n` +
+          (lesson.keyDecisions.length > 0 ? `### Key Decisions\n${lesson.keyDecisions.map(d=>`- ${d}`).join('\n')}\n` : '') +
+          (lesson.commonMistakes.length > 0 ? `### Avoid These Mistakes\n${lesson.commonMistakes.map(m=>`- ${m}`).join('\n')}\n` : '');
+
+        const keepCount = Math.max(3, Math.ceil(entries.length * 0.3));
+        const toKeep = entries.slice(-keepCount);
+        const toSummarize = entries.slice(0, -keepCount);
+
+        let summary = '';
+        try {
+          const summaryResult = await deps.extractor.extract(
+            `Summarize the following old AGENTS.md entries into a compact form. Preserve only the most important decisions and mistakes. Keep it under 200 characters total.
+
+Old entries to summarize:
+${toSummarize.join('\n---\n')}
+
+Return a JSON object: {"summary": "...", "decisions": [], "mistakes": []}`,
+            z.object({ summary: z.string(), decisions: z.array(z.string()), mistakes: z.array(z.string()) }),
+            { system: 'You compress historical notes into a compact summary for AGENTS.md.', model: deps.config.agentModel },
+          );
+          summary = summaryResult.summary;
+        } catch (err) {
+          log.warn('memory_consolidation.summarization_failed', { error: String(err), fallback: 'skipping_summary' });
+          summary = `[Consolidated ${toSummarize.length} old entries — summarization unavailable]`;
+        }
+
+        const consolidated = `# AGENTS.md\n\n${summary}\n\n${toKeep.join('\n')}\n${newEntry}`;
+        await fs.writeFile(agentsMdPath, consolidated);
+        log.info('memory_consolidation.agents_md_consolidated', {
+          oldEntries: entries.length,
+          keptEntries: toKeep.length,
+          summarizedEntries: toSummarize.length,
+          finalSize: consolidated.length,
+        });
+      } else {
+        // Under threshold — simple append
+        await fs.writeFile(agentsMdPath, proposed);
+        log.info('memory_consolidation.agents_md_updated', { size: proposed.length });
+      }
     } catch (err) { log.warn('memory_consolidation.agents_md_failed', { error: String(err) }); }
   }
 
@@ -116,4 +161,25 @@ export async function memoryConsolidationImpl(state: WorkflowState, deps: Activi
     currentPhase:  'COMPLETE',
     lessonLearned: lesson,
   }, { node: 'memory_consolidation', decision: 'lesson_compiled', keyValues: { succeededVia: lesson.succeededVia, costUsd: lesson.totalCostUsd, qualityFlagged: qualityIssues.length > 0 } });
+}
+
+/**
+ * Splits AGENTS.md content into individual session entry strings.
+ * Entries start with `## Session YYYY-MM-DD — `.
+ */
+function parseAgentsMdEntries(content: string): string[] {
+  const lines = content.split('\n');
+  const entries: string[] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (/^## Session \d{4}-\d{2}-\d{2} — /.test(line)) {
+      if (current.length > 0) entries.push(current.join('\n'));
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  if (current.length > 0) entries.push(current.join('\n'));
+  return entries;
 }
