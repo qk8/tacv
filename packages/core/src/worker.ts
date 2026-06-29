@@ -5,6 +5,7 @@ import { ObservabilityInterceptor } from './observability/interceptors.js';
 import { loadConfig }              from './config/index.js';
 import { createDeps }              from './activities/createDeps.js';
 import { registerActivities }      from './activities/registerActivities.js';
+import { registerShutdown }        from './activities/infrastructure/gracefulShutdown.js';
 
 async function run(): Promise<void> {
   initOtel();
@@ -44,6 +45,9 @@ async function run(): Promise<void> {
     },
     maxConcurrentActivityTaskExecutions: config.maxParallelCritics + 4,
   });
+
+  // ── Graceful shutdown: finish in-flight tasks on SIGTERM/SIGINT ───────────
+  registerShutdown(worker);
 
   console.log(`[tacv] Worker running on queue: ${config.taskQueue}`);
   await worker.run();
