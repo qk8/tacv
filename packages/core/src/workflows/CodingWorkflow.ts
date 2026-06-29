@@ -339,13 +339,39 @@ export async function SpeculativeBranchWorkflow(
   parentState: WorkflowState,
   _config:     WorkflowConfig,
 ): Promise<SpeculativeBranchResult> {
+  // Mirror the main workflow's differentiated proxy groups for independent
+  // retry/timeout per stage (Issue 10: avoid 90s mutation timeout causing
+  // type-check to retry unnecessarily).
   const {
     runActor, runPreflight, runAllCritics,
-    runVerifierTypeCheck, runVerifierTests, runVerifierApi,
-    runVerifierMutation, runVerifierVisual,
   } = proxyActivities<RegisteredActivities>({
     startToCloseTimeout: '10 minutes',
-    retry: { maximumAttempts: 2 },
+    retry: { maximumAttempts: 2, initialInterval: '2s', backoffCoefficient: 2 },
+  });
+
+  const { runVerifierTypeCheck } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '2 minutes',
+    retry: { maximumAttempts: 2, initialInterval: '1s', backoffCoefficient: 2 },
+  });
+
+  const { runVerifierTests } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '10 minutes',
+    retry: { maximumAttempts: 2, initialInterval: '5s', backoffCoefficient: 2 },
+  });
+
+  const { runVerifierApi } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '5 minutes',
+    retry: { maximumAttempts: 2, initialInterval: '5s', backoffCoefficient: 2 },
+  });
+
+  const { runVerifierMutation } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '5 minutes',
+    retry: { maximumAttempts: 1, initialInterval: '10s', backoffCoefficient: 2 },
+  });
+
+  const { runVerifierVisual } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '10 minutes',
+    retry: { maximumAttempts: 1, initialInterval: '10s', backoffCoefficient: 2 },
   });
 
   const candidate = parentState.selectedStrategy;
