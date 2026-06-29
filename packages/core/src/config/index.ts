@@ -146,6 +146,10 @@ export const CriticLanesConfig = z.object({
   semanticLaneDeferCycles: z.number().int().min(0).default(1),
 });
 
+export const HitlConfig = z.object({
+  waitTimeout: z.string().default('48 hours'),
+});
+
 // ── Language-specific config ──────────────────────────────────────────────────
 
 export const TypeScriptLanguageConfig = z.object({
@@ -208,6 +212,7 @@ export const WorkflowConfig = z.object({
   planning:     PlanningConfig.default({}),
   gitCheckpoint: GitCheckpointConfig.default({}),
   criticLanes:  CriticLanesConfig.default({}),
+  hitl:         HitlConfig.default({}),
   skipTddGate:  z.boolean().default(false),
 
   // Language-specific config

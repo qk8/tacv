@@ -91,7 +91,7 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
       hint: 'Tests were already failing before agent started — fix baseline first',
     });
     state = await runHitlEscalation(state, 'baseline_tests_failing');
-    const received = await condition(() => human !== null || aborted, '48 hours');
+    const received = await condition(() => human !== null || aborted, config.hitl.waitTimeout);
     const hd = human as HumanDecision | null;
     if (!received || aborted || hd?.action === 'reject') return null;
     if (hd?.action === 'override' && hd.guidance) {
@@ -104,7 +104,7 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
   state = await runFeasibilityCheck(state);
   if (state.currentPhase === 'HITL_ESCALATION') {
     state = await runHitlEscalation(state, 'high_ambiguity_before_start');
-    const received = await condition(() => human !== null || aborted, '48 hours');
+    const received = await condition(() => human !== null || aborted, config.hitl.waitTimeout);
     const hd = human as HumanDecision | null;
     if (!received || aborted || hd?.action === 'reject') {
       state = withPhase(state, 'FAILED');
@@ -174,7 +174,7 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
             confidence: state.testValidityFlag?.confidence,
           });
           state = await runHitlEscalation(state, 'test_fault_needs_human_approval');
-          const received = await condition(() => human !== null || aborted, '48 hours');
+          const received = await condition(() => human !== null || aborted, config.hitl.waitTimeout);
           const hd = human as HumanDecision | null;
           if (!received || aborted || hd?.action === 'reject') { state = withPhase(state, 'FAILED'); break; }
           if (hd?.action === 'override' && hd.guidance) {
@@ -220,7 +220,7 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
 
     if (transition.nextPhase === 'HITL_ESCALATION') {
       state = await runHitlEscalation(state, transition.reason);
-      const received = await condition(() => human !== null || aborted, '48 hours');
+      const received = await condition(() => human !== null || aborted, config.hitl.waitTimeout);
       const hd = human as HumanDecision | null;
       if (!received || aborted || hd?.action === 'reject') { state = withPhase(state, 'FAILED'); break; }
 
