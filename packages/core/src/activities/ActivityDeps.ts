@@ -55,4 +55,8 @@ export interface ActivityDeps {
   readonly sessionId:      string;
   /** Optional heartbeat callback for long-running activities. */
   readonly heartbeat?:     (data?: unknown) => void;
+  /** Optional execFile override for testing. */
+  readonly execFile?:      typeof import('node:child_process').execFile;
+  /** Optional pre-bound git executor for testing. */
+  readonly gitExecutor?:   (args: string[], cwd: string) => Promise<string>;
 }
