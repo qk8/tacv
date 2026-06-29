@@ -1,6 +1,6 @@
 import {
   proxyActivities, defineSignal, defineQuery,
-  setHandler, condition, log, executeChild, workflowInfo,
+  setHandler, condition, log, executeChild, workflowInfo, CancellationScope,
 } from '@temporalio/workflow';
 import type { RegisteredActivities } from '../activities/registerActivities.js';
 import type { TaskSpec, WorkflowState, LessonLearned } from '../state/schemas.js';
@@ -74,10 +74,15 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
   let state   = createInitialState(task, workflowInfo().workflowId);
   let human:  HumanDecision | null = null;
   let aborted = false;
+  let correctionScope: CancellationScope | null = null;
 
   setHandler(workflowStateQuery, () => state);
   setHandler(humanResumeSignal, (d) => { human = d; });
-  setHandler(humanAbortSignal, ({ reason }) => { log.warn('workflow.aborted', { reason }); aborted = true; });
+  setHandler(humanAbortSignal, ({ reason }) => {
+    log.warn('workflow.aborted', { reason });
+    aborted = true;
+    if (correctionScope) correctionScope.cancel();
+  });
 
   // ── Setup phases ──────────────────────────────────────────────────────────
   state = await runBootstrap(state);
@@ -131,8 +136,12 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     state = await runSandboxValidation(state);
   }
 
-  // ── Correction loop ───────────────────────────────────────────────────────
-  for (let i = 0; i < config.maxSelfCorrectionCycles && !aborted; i++) {
+  // ── Correction loop (with cancellation scope for graceful abort) ──────────
+  correctionScope = new CancellationScope();
+  correctionScope.onCancel(() => { log.info('workflow.correction_loop_cancelled'); });
+  try {
+    await correctionScope.child(async () => {
+      for (let i = 0; i < config.maxSelfCorrectionCycles && !aborted; i++) {
     state = withAuditEntry(state, {
       node: 'correction_loop', decision: `cycle_start_${i}`,
       keyValues: { cycle: i, cost: state.cumulativeCostUsd },
@@ -299,6 +308,15 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
 
     if (transition.nextPhase === 'REPLAN') { state = await runReplan(state); continue; }
     // default: ACTOR retry
+      }
+    });
+  } catch (err) {
+    // Cancellation scope was cancelled — in-flight activities were aborted
+    if (aborted) {
+      log.info('workflow.correction_loop_aborted', { error: String(err) });
+      return null;
+    }
+    throw err;
   }
 
   if (state.currentPhase !== 'FAILED' && !aborted) {
