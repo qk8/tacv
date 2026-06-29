@@ -19,6 +19,18 @@ export const humanResumeSignal  = defineSignal<[HumanDecision]>('human.resume');
 export const humanAbortSignal   = defineSignal<[{ reason: string }]>('human.abort');
 export const workflowStateQuery = defineQuery<WorkflowState>('workflow.state');
 
+// ── Feature F4: Progress and cost queries ─────────────────────────────────────
+export interface WorkflowProgressResult {
+  phase: string; cycle: number; costUsd: number;
+  confidenceScore: number; lastDecision: string; elapsedMs: number;
+}
+export interface WorkflowCostResult {
+  cumulativeCostUsd: number; budgetLimitUsd: number;
+  budgetUsedPct: number; actorCallCount: number;
+}
+export const workflowProgressQuery = defineQuery<WorkflowProgressResult>('workflow.progress');
+export const workflowCostQuery     = defineQuery<WorkflowCostResult>('workflow.cost');
+
 // ── Proxy activity groups with differentiated timeouts ─────────────────────────
 // Standard activities: 10-minute timeout, 3 retries
 const {
@@ -83,6 +95,26 @@ export async function CodingWorkflow(task: TaskSpec, config: WorkflowConfig): Pr
     log.warn('workflow.aborted', { reason });
     aborted = true;
     if (correctionScope) correctionScope.cancel();
+  });
+  setHandler(workflowProgressQuery, () => {
+    const lastEntry = state.workflowAuditTrail[state.workflowAuditTrail.length - 1];
+    return {
+      phase: state.currentPhase,
+      cycle: state.correctionCycle.attemptCount,
+      costUsd: state.cumulativeCostUsd,
+      confidenceScore: state.confidenceScore,
+      lastDecision: lastEntry?.decision ?? 'session_started',
+      elapsedMs: Date.now() - state.workflowStartMs,
+    };
+  });
+  setHandler(workflowCostQuery, () => {
+    const budgetLimit = config.tokenBudget.totalUsd;
+    return {
+      cumulativeCostUsd: state.cumulativeCostUsd,
+      budgetLimitUsd: budgetLimit,
+      budgetUsedPct: budgetLimit > 0 ? (state.cumulativeCostUsd / budgetLimit) * 100 : 0,
+      actorCallCount: state.correctionCycle.attemptCount,
+    };
   });
 
   // ── Setup phases ──────────────────────────────────────────────────────────
