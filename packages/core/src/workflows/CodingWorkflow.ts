@@ -1,6 +1,6 @@
 import {
   proxyActivities, defineSignal, defineQuery,
-  setHandler, condition, log, executeChild, workflowInfo, CancellationScope,
+  setHandler, condition, log, executeChild, workflowInfo, CancellationScope, sleep,
 } from '@temporalio/workflow';
 import type { RegisteredActivities } from '../activities/registerActivities.js';
 import type { TaskSpec, WorkflowState, LessonLearned } from '../state/schemas.js';
@@ -385,6 +385,29 @@ export async function ShadowModeWorkflow(ctx: { repoPath: string; maxTasks: numb
     startToCloseTimeout: '20 minutes', retry: { maximumAttempts: 2 },
   });
   await runShadowCycle(ctx);
+}
+
+/**
+ * Cron-triggered shadow mode workflow.
+ *
+ * Runs indefinitely until the parent workflow is cancelled (e.g., on worker shutdown).
+ * Each run executes ShadowModeWorkflow to autonomously discover code quality issues.
+ */
+export async function ShadowModeCronWorkflow(repoPath: string, maxTasks: number): Promise<void> {
+  const shadowIntervalMs = 3600_000; // 1 hour between shadow runs
+  let iteration = 0;
+
+  while (true) {
+    if (iteration > 0) {
+      // Wait between runs — cancellation will abort this sleep
+      await sleep(shadowIntervalMs);
+    }
+    iteration++;
+
+    log.info('shadow.cron_run', { iteration, repoPath, maxTasks });
+    await ShadowModeWorkflow({ repoPath, maxTasks });
+    log.info('shadow.cron_run_complete', { iteration });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
