@@ -4,12 +4,23 @@ import { createInitialState } from '../../../src/state/schemas.js';
 import { makeStubDeps } from '../../helpers/stubDeps.js';
 import * as fs from 'node:fs/promises';
 
-vi.mock('node:fs/promises');
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof fs>('node:fs/promises');
+  return {
+    ...actual,
+    stat: vi.fn(),
+    readFile: vi.fn(),
+  };
+});
 
 const task = { taskId: 'b1', description: 'test', mode: 'GREENFIELD' as const, moduleType: 'backend', languageIds: ['typescript'] };
 
 describe('bootstrapImpl', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // Default: stat returns a valid directory
+    vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as never);
+  });
 
   it('transitions to SCOUT phase', async () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
@@ -47,5 +58,14 @@ describe('bootstrapImpl', () => {
     const state = createInitialState(task);
     const result = await bootstrapImpl(state, deps);
     expect((result.agentsMdContext ?? '').length).toBeLessThanOrEqual(1000);
+  });
+
+  it('throws when repoPath does not exist', async () => {
+    const enoent = new Error('ENOENT');
+    (enoent as NodeJS.ErrnoException).code = 'ENOENT';
+    vi.mocked(fs.stat).mockRejectedValue(enoent);
+    const deps = makeStubDeps();
+    deps.repoPath = '/nonexistent/path/that/does/not/exist';
+    await expect(bootstrapImpl(createInitialState(task), deps)).rejects.toThrow('repoPath not found');
   });
 });

@@ -2,6 +2,7 @@ import type { WorkflowState } from '../../state/schemas.js';
 import { withAuditEntry } from '../../state/schemas.js';
 import type { ActivityDeps } from '../ActivityDeps.js';
 import { createLogger } from '../../observability/logger.js';
+import { validateRepoPath } from '../infrastructure/repoPathValidation.js';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -9,6 +10,9 @@ const log = createLogger('tacv.bootstrap');
 
 export async function bootstrapImpl(state: WorkflowState, deps: ActivityDeps): Promise<WorkflowState> {
   log.info('bootstrap.start', { taskId: state.taskId });
+
+  // Validate repoPath exists before attempting any file operations
+  await validateRepoPath(deps.repoPath);
 
   // Read AGENTS.md if present
   let agentsMdContext: string | null = null;
