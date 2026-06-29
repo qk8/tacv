@@ -58,12 +58,13 @@ describe('Workflow integration — problem fixes', () => {
     }
   });
 
-  it('audit trail is capped at 100 entries', () => {
+  it('audit trail is capped at 200 entries with smart pruning', () => {
     let state = createInitialState(task);
-    for (let i = 0; i < 110; i++) {
+    for (let i = 0; i < 250; i++) {
       state = withAuditEntry(state, { node: 'test', decision: `step_${i}`, keyValues: {} });
     }
-    expect(state.workflowAuditTrail.length).toBeLessThanOrEqual(100);
+    // Cap is 200, prunes to 150 when exceeded — final count ≤ 200
+    expect(state.workflowAuditTrail.length).toBeLessThanOrEqual(200);
   });
 
   it('PASS always goes to MEMORY_CONSOLIDATION regardless of budget', () => {

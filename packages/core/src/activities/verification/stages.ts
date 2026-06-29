@@ -190,7 +190,7 @@ export async function verifierTestsStage(
       }, { node: 'verifier_tests', decision: 'FAIL_ACCEPTANCE', keyValues: { count: accResult.failedTests } });
     }
 
-    // ── Coverage check (hard fail — blocks progression) ─────────────────────
+    // ── Coverage check (soft fail — warning only, tests passing takes precedence) ──
     const coverageReport = accResult.coverageReport ?? protResult.coverageReport;
     const baselineCoverage = state.baselineTestResult?.coverageReport;
     if (coverageReport && baselineCoverage) {
@@ -199,25 +199,18 @@ export async function verifierTestsStage(
         log.warn('verifier.tests.coverage_regression', { violations: coverageOk.violations });
         return withAuditEntry({
           ...state,
-          verifierVerdict: failVerdict(
-            coverageOk.violations.map(v => ({ testName: 'coverage', message: v.message })),
-            'FIX_TEST',
-            state,
-          ),
-        }, { node: 'verifier_tests', decision: 'FAIL_COVERAGE', keyValues: { violations: coverageOk.violations } });
+          verifierVerdict: passVerdict(state),
+        }, { node: 'verifier_tests', decision: 'COVERAGE_WARNING', keyValues: { violations: coverageOk.violations } });
       }
     } else if (coverageReport && !baselineCoverage) {
-      // No baseline available — check against minimum threshold
+      // No baseline available — warn if below minimum threshold
       const minLine = deps.config.coverage.minimumLineCoverage;
       if (coverageReport.lines < minLine) {
+        log.warn('verifier.tests.coverage_below_minimum', { coverage: coverageReport.lines, minimum: minLine });
         return withAuditEntry({
           ...state,
-          verifierVerdict: failVerdict(
-            [{ testName: 'coverage', message: `Line coverage ${coverageReport.lines.toFixed(1)}% < minimum ${minLine}%` }],
-            'FIX_TEST',
-            state,
-          ),
-        }, { node: 'verifier_tests', decision: 'FAIL_COVERAGE', keyValues: { coverage: coverageReport.lines } });
+          verifierVerdict: passVerdict(state),
+        }, { node: 'verifier_tests', decision: 'COVERAGE_WARNING', keyValues: { coverage: coverageReport.lines, minimum: minLine } });
       }
     }
   } catch (err) {

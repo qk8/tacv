@@ -20,12 +20,12 @@ describe('createInitialState', () => {
     expect(s1.sessionId).not.toBe(s2.sessionId);
   });
 
-  it('caps workflowAuditTrail at 100 entries', () => {
+  it('caps workflowAuditTrail at 200 entries with smart pruning', () => {
     let s = createInitialState(task);
-    for (let i = 0; i < 110; i++) {
+    for (let i = 0; i < 250; i++) {
       s = withAuditEntry(s, { node: 'test', decision: `step_${i}`, keyValues: {} });
     }
-    expect(s.workflowAuditTrail.length).toBeLessThanOrEqual(100);
+    expect(s.workflowAuditTrail.length).toBeLessThanOrEqual(200);
   });
 });
 
