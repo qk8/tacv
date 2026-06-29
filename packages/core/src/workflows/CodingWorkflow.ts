@@ -12,6 +12,7 @@ import type { EscalationReason } from '../state/transitions.js';
 export interface HumanDecision { action: 'approve'|'reject'|'override'; guidance: string }
 export interface SpeculativeBranchResult {
   succeeded: boolean; winningState: Partial<WorkflowState> | null; attempts: number;
+  hadFlakiness?: boolean;
 }
 
 export const humanResumeSignal  = defineSignal<[HumanDecision]>('human.resume');
@@ -374,6 +375,12 @@ export async function SpeculativeBranchWorkflow(
     retry: { maximumAttempts: 1, initialInterval: '10s', backoffCoefficient: 2 },
   });
 
+  // Issue 11: checkpoint + flakiness support
+  const { runGitCheckpoint, runFlakinessCheck } = proxyActivities<RegisteredActivities>({
+    startToCloseTimeout: '5 minutes',
+    retry: { maximumAttempts: 2 },
+  });
+
   const candidate = parentState.selectedStrategy;
   if (!candidate) {
     log.warn('speculative.no_candidate');
@@ -395,7 +402,20 @@ export async function SpeculativeBranchWorkflow(
       s = await runVerifierMutation(s);
       s = await runVerifierVisual(s);
     }
+    // Issue 11: check flakiness before declaring branch failed
+    if (s.verifierVerdict?.testResult === 'FAIL' && s.verifierVerdict?.testFailures.length && s.verifierVerdict.testFailures.length > 0) {
+      s = await runFlakinessCheck(s);
+      if (s.flakinessReport && s.flakinessReport.flakyTests.length > 0) {
+        log.warn('speculative.flaky_tests', {
+          strategyId: candidate.strategyId,
+          count: s.flakinessReport.flakyTests.length,
+        });
+        return { succeeded: false, winningState: null, attempts: 1, hadFlakiness: true };
+      }
+    }
+    // Issue 11: create checkpoint before declaring victory
     if (s.verifierVerdict?.testResult === 'PASS') {
+      s = await runGitCheckpoint(s);
       log.info('speculative.branch_passed', { strategyId: candidate.strategyId });
       return { succeeded: true, winningState: s, attempts: 1 };
     }
