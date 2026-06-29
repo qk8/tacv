@@ -1,4 +1,5 @@
 import { Worker, NativeConnection, Runtime } from '@temporalio/worker';
+import { activityContext } from '@temporalio/activity';
 import { initOtel }                from './observability/otel.js';
 import { ObservabilityInterceptor } from './observability/interceptors.js';
 import { loadConfig }              from './config/index.js';
@@ -27,7 +28,19 @@ async function run(): Promise<void> {
     workflowsPath: new URL('./workflows/index.js', import.meta.url).pathname,
     activities,
     interceptors: {
-      activityInbound: [() => new ObservabilityInterceptor()],
+      activityInbound: [() => new ObservabilityInterceptor(), {
+        // Inject Temporal heartbeat into deps for activities that need it
+        aroundStart: ({ start }) => async (input) => {
+          // Attach heartbeat to deps for this activity invocation
+          const origHeartbeat = deps.heartbeat;
+          deps.heartbeat = (data?: unknown) => {
+            try { activityContext().heartbeat(data); } catch { /* already gone */ }
+          };
+          const result = await start(input);
+          deps.heartbeat = origHeartbeat;
+          return result;
+        },
+      }],
     },
     maxConcurrentActivityTaskExecutions: config.maxParallelCritics + 4,
   });

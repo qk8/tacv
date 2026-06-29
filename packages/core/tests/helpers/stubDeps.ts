@@ -135,6 +135,7 @@ export function makeStubDeps(overrides: Partial<ActivityDeps> = {}): ActivityDep
     } as LanguagePluginRegistry,
     log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never,
     repoPath: '/tmp/tacv-test', taskId: 'test-task', sessionId: 'test-session',
+    heartbeat: () => {}, // no-op by default
     ...overrides,
   } as ActivityDeps;
 }

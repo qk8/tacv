@@ -32,6 +32,7 @@ export async function flakinessCheckImpl(state: WorkflowState, deps: ActivityDep
         .then(r => r.passed)
         .catch(() => false);
       runs.push(passed);
+      try { deps.heartbeat?.({ testFile, iteration: i + 1, total: cfg.runCount }); } catch { /* activity cancelled */ }
     }
     const passRate = runs.filter(Boolean).length / runs.length;
     if (passRate > 0 && passRate < cfg.passThreshold) {

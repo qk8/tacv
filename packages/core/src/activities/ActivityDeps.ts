@@ -53,4 +53,6 @@ export interface ActivityDeps {
   readonly repoPath:       string;
   readonly taskId:         string;
   readonly sessionId:      string;
+  /** Optional heartbeat callback for long-running activities. */
+  readonly heartbeat?:     (data?: unknown) => void;
 }
