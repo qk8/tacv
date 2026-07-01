@@ -32,6 +32,9 @@ export const stubConfig: WorkflowConfig = {
   planning:     { enabled: true, validateWithFastCritics: true, model: 'claude-haiku-4-5-20251001' },
   gitCheckpoint: { enabled: false, branchPrefix: 'tacv/', authorName: 'TACV Bot', authorEmail: 'tacv@automated' },
   criticLanes:  { alwaysRunSemantic: false, semanticLaneDeferCycles: 1 },
+  hitl: { waitTimeout: '48 hours' },
+  skipTddGate: false,
+  agentTeam: { enabled: false, maxParallelImplementors: 3, continuousVerification: true },
 };
 
 const passTestResult: TestResult = { passed: true, totalTests: 5, failedTests: 0, failures: [], coverageReport: null, durationMs: 100 };

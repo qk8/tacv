@@ -8,7 +8,6 @@ export * from './actor/impl.js';
 export * from './preflight/impl.js';
 export * from './critics/impl.js';
 export * from './verification/coverageCheck.js';
-export * from './verification/incrementalSelector.js';
 export * from './flakiness/impl.js';
 export * from './test-validity/impl.js';
 export * from './debugger/impl.js';

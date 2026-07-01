@@ -141,6 +141,16 @@ export const GitCheckpointConfig = z.object({
   authorEmail:  z.string().default('tacv@automated'),
 });
 
+// ★ V2 REDESIGN: multi-agent team (Scout/Test-Writer/Implementor/Critic-Council)
+// driving the initial implementation pass via a dependency-ordered task graph,
+// in place of one monolithic actor. Opt-in, like gitCheckpoint above, so
+// existing single-actor behavior is the default and unaffected.
+export const AgentTeamConfig = z.object({
+  enabled:                 z.boolean().default(false),
+  maxParallelImplementors: z.number().int().min(1).max(5).default(3),
+  continuousVerification:  z.boolean().default(true),
+});
+
 export const CriticLanesConfig = z.object({
   alwaysRunSemantic:       z.boolean().default(false),
   semanticLaneDeferCycles: z.number().int().min(0).default(1),
@@ -211,6 +221,7 @@ export const WorkflowConfig = z.object({
   baseline:     BaselineConfig.default({}),
   planning:     PlanningConfig.default({}),
   gitCheckpoint: GitCheckpointConfig.default({}),
+  agentTeam:     AgentTeamConfig.default({}),
   criticLanes:  CriticLanesConfig.default({}),
   hitl:         HitlConfig.default({}),
   skipTddGate:  z.boolean().default(false),

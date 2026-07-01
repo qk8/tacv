@@ -32,6 +32,18 @@ import {
   verifierVisualStage,
 } from './verification/stages.js';
 
+// ── ★ V2 redesign: agent team, continuous verification, knowledge graph ───────
+import { testWriterImpl }   from '../agents/testWriter/impl.js';
+import { implementorImpl }  from '../agents/implementor/impl.js';
+import { mergeAgentTeamDiffs } from '../agents/mergeResults.js';
+import type { TaskNode } from '../planning/graph.js';
+import type { DiffEntry } from '../state/schemas.js';
+import {
+  runContinuousVerification as continuousVerificationCheck,
+  buildInlineFeedback,
+} from './verification/continuousVerifier.js';
+import { applyKnowledgeGraphBriefing, inferTaskCategory } from '../workflows/scoutBriefing.js';
+
 export function registerActivities(deps: ActivityDeps) {
   const ctx = (s: WorkflowState): ActivityDeps => ({ ...deps, taskId: s.taskId, sessionId: s.sessionId });
 
@@ -72,6 +84,49 @@ export function registerActivities(deps: ActivityDeps) {
     runStagnationCheck: (s: WorkflowState) => {
       const { pattern, newCycle } = checkStagnationImpl(s, deps.config.stagnation.semanticSimilarityThreshold);
       return Promise.resolve({ ...s, correctionCycle: newCycle });
+    },
+
+    // ── ★ V2 redesign: multi-agent team (one node at a time; the workflow
+    // iterates DAG lanes and calls these per node, in parallel within a lane) ──
+    runTestWriter: async (s: WorkflowState, node: TaskNode): Promise<WorkflowState> => {
+      const result = await testWriterImpl(node, s, ctx(s));
+      const merged = mergeAgentTeamDiffs([
+        { diffs: s.diffProposal?.diffs ?? [], summary: s.diffProposal?.summary ?? '', costUsd: 0, roleViolations: [] },
+        result,
+      ]);
+      return { ...s, diffProposal: merged.diffProposal, cumulativeCostUsd: s.cumulativeCostUsd + result.costUsd };
+    },
+
+    runImplementor: async (s: WorkflowState, node: TaskNode, testFiles: DiffEntry[]): Promise<WorkflowState> => {
+      const result = await implementorImpl(node, s, testFiles, ctx(s));
+      const merged = mergeAgentTeamDiffs([
+        { diffs: s.diffProposal?.diffs ?? [], summary: s.diffProposal?.summary ?? '', costUsd: 0, roleViolations: [] },
+        result,
+      ]);
+      return { ...s, diffProposal: merged.diffProposal, cumulativeCostUsd: s.cumulativeCostUsd + result.costUsd };
+    },
+
+    // ★ V2: per-file fail-fast verification during the multi-agent DAG
+    // execution phase, distinct from (and complementary to) the existing
+    // end-of-cycle staged verifier used by the correction loop.
+    runContinuousVerificationCheck: async (s: WorkflowState): Promise<WorkflowState> => {
+      if (!s.diffProposal || s.diffProposal.diffs.length === 0) return s;
+      const knownTestFiles = s.diffProposal.testFilePaths;
+      const outcome = await continuousVerificationCheck(s.diffProposal.diffs, knownTestFiles, ctx(s));
+      if (outcome.allOk) return s;
+      const lastResult = outcome.results[outcome.results.length - 1];
+      const feedback = lastResult ? buildInlineFeedback(lastResult) : 'Continuous verification found an issue.';
+      const note = `[continuous-verify] ${feedback}`;
+      return { ...s, sessionScratchpad: s.sessionScratchpad ? `${s.sessionScratchpad}\n${note}` : note };
+    },
+
+    // ★ V2: proactive organizational-knowledge briefing, applied once right
+    // after Scout. A no-op when no knowledgeGraph provider is configured.
+    runKnowledgeGraphBriefing: async (s: WorkflowState): Promise<WorkflowState> => {
+      if (!deps.knowledgeGraph) return s;
+      const category = inferTaskCategory(s.task.description);
+      const briefing = deps.knowledgeGraph.buildScoutBriefing(s.task.moduleType, category);
+      return applyKnowledgeGraphBriefing(s, briefing);
     },
   };
 }

@@ -59,4 +59,6 @@ export interface ActivityDeps {
   readonly execFile?:      typeof import('node:child_process').execFile;
   /** Optional pre-bound git executor for testing. */
   readonly gitExecutor?:   (args: string[], cwd: string) => Promise<string>;
+  /** ★ V2: optional organizational knowledge graph (see IKnowledgeGraphProvider). Absent = no briefing, graceful no-op. */
+  readonly knowledgeGraph?: import('../interfaces/IKnowledgeGraphProvider.js').IKnowledgeGraphProvider;
 }
